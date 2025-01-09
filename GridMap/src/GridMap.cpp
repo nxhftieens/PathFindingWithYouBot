@@ -44,14 +44,6 @@ void GridMapVisualize(int cellSize, int rows, int cols)
     // Flag to indicate if the path needs to be updated
     bool pathNeedsUpdate = true;
 
-    // Variables for robot movement
-    size_t robotPathIndex = 0;
-    float robotSpeed = 50.0f; // Speed in grids per second
-    sf::Clock robotClock;
-    float accumulatedDistance = 0.0f;
-    float totalPathLength = 0.0f;
-    std::vector<float> segmentLengths;
-
     // Main loop
     while (window.isOpen())
     {
@@ -183,32 +175,9 @@ void GridMapVisualize(int cellSize, int rows, int cols)
 			pathGenerationTime = std::chrono::duration<double, std::milli>(endTime - startTime).count();
             window.setTitle("Grid Map - Path Generation Time: " + std::to_string(pathGenerationTime) + " ms");
             
-            // Reset robot movement variables
-            robotPathIndex = 0;
-            accumulatedDistance = 0.0f;
-            totalPathLength = 0.0f;
-            segmentLengths.clear();
-            robotClock.restart();
-
-            // Calculate segment lengths
-            if (!path.empty())
-            {
-                for (size_t i = 0; i < path.size() - 1; ++i)
-                {
-                    float segmentLengthPixels = std::hypot(
-                        path[i + 1].x - path[i].x,
-                        path[i + 1].y - path[i].y
-                    );
-                    //float segmentLengthGrids = segmentLengthPixels / static_cast<float>(cellSize);
-                    segmentLengths.push_back(segmentLengthPixels);
-                    totalPathLength += segmentLengthPixels;
-                }
-            }
-
             pathNeedsUpdate = false;
         }
 
-        // Draw the path
         if (!path.empty())
         {
             sf::VertexArray pathLines(sf::PrimitiveType::LineStrip, path.size());
@@ -218,55 +187,6 @@ void GridMapVisualize(int cellSize, int rows, int cols)
                 pathLines[i].color = sf::Color::Green;
             }
             window.draw(pathLines);
-        }
-
-        // Update and draw the robot
-        if (!path.empty() && !segmentLengths.empty())
-        {
-            float deltaTime = robotClock.restart().asSeconds();
-
-            // Move the robot along the path
-            float distanceToMove = robotSpeed * deltaTime;
-            accumulatedDistance += distanceToMove;
-
-            // Find the current segment based on accumulated distance
-            static float distanceCovered = 0.0f;
-            while (robotPathIndex < segmentLengths.size() - 1 && accumulatedDistance > distanceCovered + segmentLengths[robotPathIndex])
-            {
-                distanceCovered += segmentLengths[robotPathIndex];
-                ++robotPathIndex;
-            }
-
-            // Check if robot has reached the end of the path
-            if (robotPathIndex >= segmentLengths.size() - 1)
-            {
-                //// Optionally, reset the robot to start again
-                //robotPathIndex = 0;
-                //accumulatedDistance = 0.0f;
-                //distanceCovered = 0.0f;
-
-                // Stop the robot at the end of the path
-                robotPathIndex = segmentLengths.size() - 1;
-                accumulatedDistance = totalPathLength;
-            }
-
-            // Interpolate the robot's position between the two points
-            sf::Vector2f robotPosition;
-            if (robotPathIndex < segmentLengths.size() - 1)
-            {
-                float segmentProgress = (accumulatedDistance - distanceCovered) / segmentLengths[robotPathIndex];
-                robotPosition = path[robotPathIndex] + (path[robotPathIndex + 1] - path[robotPathIndex]) * segmentProgress;
-            }
-            else
-            {
-                robotPosition = path.back();
-            }
-
-            // Draw the robot as a circle
-            sf::CircleShape robotShape(static_cast<float>(cellSize) / 2.0f);
-            robotShape.setFillColor(sf::Color::Magenta);
-            robotShape.setPosition(robotPosition - sf::Vector2f(static_cast<float>(cellSize) / 2.0f, static_cast<float>(cellSize) / 2.0f));
-            window.draw(robotShape);
         }
 
         // Highlight the selected cell
