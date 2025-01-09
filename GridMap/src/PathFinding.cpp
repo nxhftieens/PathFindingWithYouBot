@@ -4,24 +4,25 @@
 #include <set>
 #include <algorithm>
 
+
 // Function to generate path using A* algorithm
-std::vector<sf::Vector2f> GeneratePath(const std::vector<std::vector<CellType>>& grid, 
-                                        const sf::Vector2i& startCell, 
-                                        const sf::Vector2i& targetCell, 
-                                        int cellSize, 
-                                        int rows, 
-                                        int cols)
+std::vector<sf::Vector2f> GeneratePathAStar(const std::vector<std::vector<CellType>>& grid, 
+                                            const sf::Vector2i& startCell, 
+                                            const sf::Vector2i& targetCell, 
+                                            int cellSize, 
+                                            int rows, 
+                                            int cols)
 {
 
     struct Node
     {
         sf::Vector2i position;
-        int gCost;
+        float gCost;
         float hCost;
         float fCost;
         Node* parent;
 
-        Node(const sf::Vector2i& pos, int g, float h, Node* p = nullptr)
+        Node(const sf::Vector2i& pos, float g, float h, Node* p = nullptr)
             : position(pos), gCost(g), hCost(h), fCost(g + h), parent(p) {
         }
     };
@@ -100,7 +101,11 @@ std::vector<sf::Vector2f> GeneratePath(const std::vector<std::vector<CellType>>&
             if (grid[neighborPos.y][neighborPos.x] == CellType::Obstacle || visited[neighborPos.y][neighborPos.x])
                 continue;
 
-            int gCost = currentNode->gCost + 1;
+            float gCost = 0;
+            if (direction == directions[0] || direction == directions[1] || direction == directions[2] || direction == directions[3])
+                gCost = currentNode->gCost + 1;
+            else
+                gCost = currentNode->gCost + std::sqrt(2);
             int dx = abs(neighborPos.x - targetCell.x);
             int dy = abs(neighborPos.y - targetCell.y);
 			float hCost = dx + dy + (std::sqrt(2)- 2) * std::min(dx, dy); // Diagonal distance heuristic

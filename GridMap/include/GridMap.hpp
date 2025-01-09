@@ -34,11 +34,19 @@ const std::vector<sf::Vector2i> directions = {
 void GridMapVisualize(int cellSize,
                         int rows,
                         int cols);
+
 void GenerateRandomMap(std::vector<std::vector<CellType>>& grid,
                         sf::Vector2i& startCell,
                         sf::Vector2i& targetCell,
                         int rows,
                         int cols);
+
+std::vector<sf::Vector2f> GeneratePathAStar(const std::vector<std::vector<CellType>>& grid, 
+                                            const sf::Vector2i& startCell, 
+                                            const sf::Vector2i& targetCell, 
+                                            int cellSize, 
+                                            int rows, 
+                                            int cols);
 
 
 #endif // !GRIDMAP_HEADER_HPP

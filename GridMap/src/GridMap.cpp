@@ -52,7 +52,7 @@ void GridMapVisualize(int cellSize,
 
     // Variables for robot movement
     size_t robotPathIndex = 0;
-    float robotSpeed = 50.0f; // Speed in grids per second
+    float robotSpeed = 100.0f; // Speed in grids per second
     sf::Clock robotClock;
     float accumulatedDistance = 0.0f;
     float totalPathLength = 0.0f;
@@ -197,7 +197,7 @@ void GridMapVisualize(int cellSize,
         {
             auto startTime = std::chrono::high_resolution_clock::now();
 
-            path = GeneratePath(grid, startCell, targetCell, cellSize, rows, cols);
+            path = GeneratePathAStar(grid, startCell, targetCell, cellSize, rows, cols);
 
 			auto endTime = std::chrono::high_resolution_clock::now();
 			pathGenerationTime = std::chrono::duration<double, std::milli>(endTime - startTime).count();
