@@ -7,10 +7,6 @@
 #include <iostream>
 #include <vector>
 #include <SFML/Graphics.hpp>
-
-#include <queue>
-#include <set>
-#include <algorithm>
 #include <random>
 
 #include <chrono>
@@ -35,9 +31,14 @@ const std::vector<sf::Vector2i> directions = {
 	{-1, -1}  // Diagonal Left Up
 };
 
-std::vector<sf::Vector2f> GeneratePath(const std::vector<std::vector<CellType>>& grid, const sf::Vector2i& startCell, const sf::Vector2i& targetCell, int cellSize, int rows, int cols);
-void GridMapVisualize(int cellSize, int rows, int cols);
-void GenerateRandomMap(std::vector<std::vector<CellType>>& grid, sf::Vector2i& startCell, sf::Vector2i& targetCell, int rows, int cols);
+void GridMapVisualize(int cellSize,
+                        int rows,
+                        int cols);
+void GenerateRandomMap(std::vector<std::vector<CellType>>& grid,
+                        sf::Vector2i& startCell,
+                        sf::Vector2i& targetCell,
+                        int rows,
+                        int cols);
 
 
 #endif // !GRIDMAP_HEADER_HPP

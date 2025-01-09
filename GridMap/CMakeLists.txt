@@ -3,7 +3,9 @@
 #
 
 # Add source to this project's executable.
-add_executable (GridMap "src/GridMap.cpp" "include/GridMap.hpp")
+add_executable (GridMap "src/GridMap.cpp"
+                        "include/GridMap.hpp"
+                        )
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)
   set_property(TARGET GridMap PROPERTY CXX_STANDARD 20)

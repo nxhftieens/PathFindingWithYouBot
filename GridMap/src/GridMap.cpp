@@ -2,6 +2,7 @@
 //
 
 #include "../include/GridMap.hpp"
+#include "../src/PathFinding.cpp"
 
 int main()
 {
@@ -14,7 +15,9 @@ int main()
 }
 
 // Function to visualize the grid map
-void GridMapVisualize(int cellSize, int rows, int cols)
+void GridMapVisualize(int cellSize,
+                        int rows,
+                        int cols)
 {
     const unsigned int gridWidth = cols * cellSize;
     const unsigned int gridHeight = rows * cellSize;
@@ -44,12 +47,16 @@ void GridMapVisualize(int cellSize, int rows, int cols)
     // Flag to indicate if the path needs to be updated
     bool pathNeedsUpdate = true;
 
+    //Flag to indicate if the robot need to move
+    bool robotNeedsMove = false;
+
     // Variables for robot movement
     size_t robotPathIndex = 0;
     float robotSpeed = 50.0f; // Speed in grids per second
     sf::Clock robotClock;
     float accumulatedDistance = 0.0f;
     float totalPathLength = 0.0f;
+    float distanceCovered = 0.0f;
     std::vector<float> segmentLengths;
 
     // Main loop
@@ -132,6 +139,19 @@ void GridMapVisualize(int cellSize, int rows, int cols)
                         GenerateRandomMap(grid, startCell, targetCell, rows, cols);
                         pathNeedsUpdate = true;
                     }
+                    if (keyEvent->code == sf::Keyboard::Key::Space)
+                    {
+                        // Toggle robot movement
+                        robotNeedsMove = !robotNeedsMove;
+                    }
+                    if (keyEvent->code == sf::Keyboard::Key::C)
+                    {
+                        // Reset robot movement variables
+                        robotPathIndex = 0;
+                        accumulatedDistance = 0.0f;
+                        totalPathLength = 0.0f;
+                        distanceCovered = 0.0f;
+                    }
                 }
             }
         }
@@ -187,6 +207,7 @@ void GridMapVisualize(int cellSize, int rows, int cols)
             robotPathIndex = 0;
             accumulatedDistance = 0.0f;
             totalPathLength = 0.0f;
+            distanceCovered = 0.0f;
             segmentLengths.clear();
             robotClock.restart();
 
@@ -225,34 +246,35 @@ void GridMapVisualize(int cellSize, int rows, int cols)
         {
             float deltaTime = robotClock.restart().asSeconds();
 
-            // Move the robot along the path
-            float distanceToMove = robotSpeed * deltaTime;
-            accumulatedDistance += distanceToMove;
+            if (robotNeedsMove) {
+                // Move the robot along the path
+                float distanceToMove = robotSpeed * deltaTime;
+                accumulatedDistance += distanceToMove;
 
-            // Find the current segment based on accumulated distance
-            static float distanceCovered = 0.0f;
-            while (robotPathIndex < segmentLengths.size() - 1 && accumulatedDistance > distanceCovered + segmentLengths[robotPathIndex])
-            {
-                distanceCovered += segmentLengths[robotPathIndex];
-                ++robotPathIndex;
+                // Find the current segment based on accumulated distance
+                while (robotPathIndex < segmentLengths.size() && accumulatedDistance > distanceCovered + segmentLengths[robotPathIndex])
+                {
+                    distanceCovered += segmentLengths[robotPathIndex];
+                    ++robotPathIndex;
+                }
             }
-
+            
+            /*
             // Check if robot has reached the end of the path
             if (robotPathIndex >= segmentLengths.size() - 1)
             {
-                //// Optionally, reset the robot to start again
-                //robotPathIndex = 0;
-                //accumulatedDistance = 0.0f;
-                //distanceCovered = 0.0f;
-
-                // Stop the robot at the end of the path
-                robotPathIndex = segmentLengths.size() - 1;
-                accumulatedDistance = totalPathLength;
+                // Optionally, reset the robot to start again
+                robotPathIndex = 0;
+                accumulatedDistance = 0.0f;
+                distanceCovered = 0.0f;
             }
+            */
 
             // Interpolate the robot's position between the two points
             sf::Vector2f robotPosition;
-            if (robotPathIndex < segmentLengths.size() - 1)
+            robotPosition.x = -1;
+            robotPosition.y = -1;
+            if (robotPathIndex <= segmentLengths.size() - 1)
             {
                 float segmentProgress = (accumulatedDistance - distanceCovered) / segmentLengths[robotPathIndex];
                 robotPosition = path[robotPathIndex] + (path[robotPathIndex + 1] - path[robotPathIndex]) * segmentProgress;
@@ -283,121 +305,12 @@ void GridMapVisualize(int cellSize, int rows, int cols)
     }
 }
 
-// Function to generate path using A* algorithm
-std::vector<sf::Vector2f> GeneratePath(const std::vector<std::vector<CellType>>& grid, const sf::Vector2i& startCell, const sf::Vector2i& targetCell, int cellSize, int rows, int cols)
-{
-    struct Node
-    {
-        sf::Vector2i position;
-        int gCost;
-        float hCost;
-        float fCost;
-        Node* parent;
-
-        Node(const sf::Vector2i& pos, int g, float h, Node* p = nullptr)
-            : position(pos), gCost(g), hCost(h), fCost(g + h), parent(p) {
-        }
-    };
-
-    // Priority queue with custom comparator
-    auto compareNodes = [](const Node* a, const Node* b)
-        {
-            return a->fCost > b->fCost;
-        };
-
-    std::priority_queue<Node*, std::vector<Node*>, decltype(compareNodes)> openList(compareNodes);
-
-    // 2D vector to keep track of visited positions
-    std::vector<std::vector<bool>> visited(rows, std::vector<bool>(cols, false));
-
-    // Add start node to open list
-    Node* startNode = new Node(startCell, 0, abs(startCell.x - targetCell.x) + abs(startCell.y - targetCell.y));
-    openList.push(startNode);
-
-    while (!openList.empty())
-    {
-        Node* currentNode = openList.top();
-        openList.pop();
-
-        int x = currentNode->position.x;
-        int y = currentNode->position.y;
-
-        // Skip if already visited
-        if (visited[y][x])
-        {
-            delete currentNode;
-            continue;
-        }
-
-        visited[y][x] = true;
-
-        // Check if target reached
-        if (currentNode->position == targetCell)
-        {
-            // Reconstruct path
-            std::vector<sf::Vector2f> path;
-            Node* pathNode = currentNode;
-            while (pathNode != nullptr)
-            {
-                // Convert cell position to pixel coordinates (center of the cell)
-                sf::Vector2f pixelPos = sf::Vector2f(
-                    (pathNode->position.x + 0.5f) * static_cast<float>(cellSize),
-                    (pathNode->position.y + 0.5f) * static_cast<float>(cellSize)
-                );
-                path.push_back(pixelPos);
-                pathNode = pathNode->parent;
-            }
-            std::reverse(path.begin(), path.end());
-
-            // Clean up nodes
-            delete currentNode;
-            while (!openList.empty())
-            {
-                delete openList.top();
-                openList.pop();
-            }
-
-            return path;
-        }
-
-        // Explore neighbors (up, down, left, right)
-        for (const auto& direction : directions)
-        {
-            sf::Vector2i neighborPos = currentNode->position + direction;
-
-            // Ensure neighbor is within bounds
-            if (neighborPos.x < 0 || neighborPos.x >= cols || neighborPos.y < 0 || neighborPos.y >= rows)
-                continue;
-
-            // Skip if neighbor is an obstacle or already visited
-            if (grid[neighborPos.y][neighborPos.x] == CellType::Obstacle || visited[neighborPos.y][neighborPos.x])
-                continue;
-
-            int gCost = currentNode->gCost + 1;
-            int dx = abs(neighborPos.x - targetCell.x);
-            int dy = abs(neighborPos.y - targetCell.y);
-			float hCost = dx + dy + (1.414 - 2) * std::min(dx, dy); // Diagonal distance heuristic
-
-            Node* neighborNode = new Node(neighborPos, gCost, hCost, currentNode);
-            openList.push(neighborNode);
-        }
-
-        // No need to delete currentNode here since it's used by its children
-    }
-
-    // Clean up remaining nodes in openList
-    while (!openList.empty())
-    {
-        delete openList.top();
-        openList.pop();
-    }
-
-    // No path found
-    return {};
-}
-
 // Function to generate random start, target, and obstacles
-void GenerateRandomMap(std::vector<std::vector<CellType>>& grid, sf::Vector2i& startCell, sf::Vector2i& targetCell, int rows, int cols)
+void GenerateRandomMap(std::vector<std::vector<CellType>>& grid,
+                        sf::Vector2i& startCell,
+                        sf::Vector2i& targetCell,
+                        int rows,
+                        int cols)
 {
     // Reset grid
     for (int y = 0; y < rows; ++y)
