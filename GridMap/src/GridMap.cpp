@@ -2,7 +2,7 @@
 //
 
 #include "../include/GridMap.hpp"
-#include "../src/PathFinding.cpp"
+#include "../src/AStar.cpp"
 
 int main()
 {
