@@ -1,135 +1,125 @@
 #ifndef DSTARLITE_HEADER_HPP
 #define DSTARLITE_HEADER_HPP
 
+#define _USE_MATH_DEFINES
+
+#include <vector>
 #include <queue>
-#include <set>
-#include <algorithm>
+#include <unordered_map>
+#include <list>
 #include <cmath>
 #include <iostream>
-#include <map>
-#include <limits>
 
 #include "../include/Element.hpp"
 
-const float INF = std::numeric_limits<float>::infinity();
+struct State {
+    int x;
+    int y;
+    std::pair<double, double> k;
 
-struct Key
-{
-    float k1, k2;
-    Key(float k1 = std::numeric_limits<float>::infinity(),
-    float k2 = std::numeric_limits<float>::infinity())
-    : k1(k1), k2(k2) {}
-
-    bool operator==(const Key& other) const
+    bool operator== (const State& other) const
     {
-        return k1 == other.k1 && k2 == other.k2;
+        return x == other.x && y == other.y;
     }
 
-    bool operator<(const Key& other) const
+    bool operator!= (const State& other) const
     {
-        if (k1 == other.k1)
-            return k2 > other.k2;
-        return k1 > other.k1;
+        return x != other.x || y != other.y;
     }
 
-    bool operator>(const Key& other) const
+    bool operator> (const State& other) const
     {
-        if (k1 == other.k1)
-            return k2 < other.k2;
-        return k1 < other.k1;
-    }
-};
-
-struct NodeDS 
-{
-	Position pos;
-	float g;
-	float rhs;
-	float h;
-	Key key;
-	std::vector<NodeDS*> successors;
-	std::vector<NodeDS*> predecessors;
-	NodeDS(const Position& pos, float g, float rhs)
-		: pos(pos), g(g), rhs(rhs), successors(), predecessors()
-	{
-	}
-};
-
-struct NodeDSComparator
-{
-    bool operator()(const NodeDS* lhs, const NodeDS* rhs) const
-    {
-        if (lhs->key < rhs->key)
-            return false;
-        if (rhs->key < lhs->key)
+        if (k.first-0.00001 > other.k.first)
             return true;
-        if (lhs->pos.x != rhs->pos.x)
-            return lhs->pos.x > rhs->pos.x;
-        return lhs->pos.y > rhs->pos.y;
+        else if (k.first < other.k.first-0.00001)
+                return false;
+        return k.second > other.k.second;
     }
-};
 
-struct PositionComparator
-{
-    bool operator()(const Position& lhs, const Position& rhs) const
+    bool operator<= (const State& other) const
     {
-        if (lhs.x == rhs.x)
-            return lhs.y > rhs.y;
-        return lhs.x > rhs.x;
-    }
-};
-
-struct OpenListComparator
-{
-    bool operator()(const std::pair<Key, Position>& lhs, const std::pair<Key, Position>& rhs) const
-    {
-        if (rhs.first < lhs.first)
+        if (k.first < other.k.first)
             return true;
-        if (lhs.first < rhs.first)
+        else if (k.first > other.k.first)
             return false;
-        if (lhs.second.x != rhs.second.x)
-            return lhs.second.x > rhs.second.x;
-        return lhs.second.y > rhs.second.y;
+        return k.second <= other.k.second + 0.00001;
+    }
+
+    bool operator< (const State& other) const
+    {
+        if (k.first + 0.00001 < other.k.first)
+            return true;
+        else if (k.first - 0.00001 > other.k.first)
+            return false;
+        return k.second < other.k.second;
     }
 };
+
+struct CellInfo
+{
+    double g;
+    double rhs;
+    double cost;
+};
+
+struct State_hash
+{
+    size_t operator() (const State& other) const
+    {
+        return other.x + 180120 * other.y;
+    }
+};
+
+typedef std::priority_queue<State, std::vector<State>, std::greater<State>> PriorityQueue;
+typedef std::unordered_map<State, CellInfo, State_hash, std::equal_to<State>> CellHash;
+typedef std::unordered_map<State, float, State_hash, std::equal_to<State>> OpenHash;
 
 class DStarLite
 {
-private:
-    std::vector<std::vector<CellType>> gridMap;
-    Position startCell, targetCell;
-    int rows, cols;
-	std::map<Position, NodeDS*, PositionComparator> allNodeDSs;
-	std::set<NodeDS*, NodeDSComparator> openList;
-
-    float km;
-
-    std::vector<Position> path;
-    Position lastStart;    
-
-    float heuristic(const Position& current, const Position& startCell);
-
-    Key calculateKey(NodeDS* u);
-
-    void updateVertex(NodeDS* u);    
-
-    bool isValidCell(const Position& pos) const;
-
-	float costFunction(NodeDS* u, NodeDS* v);
-
 public:
-    void computeShortestPath();
 
-    DStarLite(const std::vector<std::vector<CellType>>& grid,
-        const Position& startCell,
-        const Position& targetCell);
-    
+    DStarLite(Position boundaries);
+    void initialize(const Position& start, const Position& target);
+    void updateCell(const Position& pos, const double& val);
+    void updateStart(const Position& start);
+    void updateTarget(const Position& target);
+    bool replan();
     std::vector<Position> getPath();
+    
+private:
+    
+    std::list<State> path;
+	Position boundaries;
 
-    void initialize(const std::vector<std::vector<CellType>>& grid,
-        const Position& start,
-        const Position& target);
+    double C1;
+    double k_m;
+    State s_start, s_target, s_last;
+    int maxSteps;
 
-	void updateObstacle(const Position& obstaclePos, const Position& newStart);
+    PriorityQueue openList;
+    OpenHash openHash;
+    CellHash cellHash;
+
+    bool close(const double& x, const double& y);
+    void makeNewCell(const State& u);
+    double getG(const State& u);
+    double getRHS(const State& u);
+    void setG(const State& u, const double& g);
+    void setRHS(const State& u, const double& rhs);
+    double eightCondist(const State& a, const State& b);
+    int computeShortestPath();
+    void updateVertex(const State& u);
+    void insert(State u);
+    void remove(const State& u);
+    double trueDist(const State& a, const State& b);
+    double heuristic(const State& a, const State& b);
+    State calculateKey(State u);
+    void getSucc(State u, std::list<State>& s);
+    void getPred(State u, std::list<State>& s);
+    double cost(const State& a, const State& b);
+    bool occupied(const State& u);
+    bool isValid(const State& u);
+    float keyHashCode(const State& u);
 };
+
 #endif // !DSTARLITE_HEADER_HPP

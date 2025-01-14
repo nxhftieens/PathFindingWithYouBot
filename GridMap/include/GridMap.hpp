@@ -28,10 +28,14 @@ private:
     float visibleRadius;
 	bool sawObstacle = false;
 	Position obstaclePos;
+
+	float length, width;
+	float safetyOffset;
+
 	bool moving = false;
 
 public:
-    Robot(const Position& pos, const float& speed, const float& visibleRadius);
+    Robot(const Position& pos, const float& speed, const float& visibleRadius, const float& length, const float& width, const float& offset);
     void calculatePathLength(const std::vector<sf::Vector2f>& path);
     void resetPathLength();
 	void movingFlagToggle()
@@ -62,6 +66,11 @@ public:
 	{
 		sawObstacle = false;
 	}
+	float getSafetyOffset()
+	{
+		return safetyOffset;
+	}
+	std::vector<Position> seenObstacles;
 };
 
 class GridMap
@@ -81,6 +90,8 @@ public:
     void randomize();
     void getPixelPath(AStar& astar);
 	void getPixelPath(DStarLite& dstarlite, Robot& robot);
+	std::vector<std::vector<CellType>> inflateObstacles(const float& inflationRadius);
+	void setWall();
 };
 
 

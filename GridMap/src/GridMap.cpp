@@ -44,16 +44,18 @@ void GridMap::eventHandler(sf::RenderWindow& window, Position& selectedCell, Rob
                 case sf::Keyboard::Key::S:
                     // Set the start point
                     startCell = selectedCell;
-                    dstarlite.initialize(gridMap, startCell, targetCell);
+                    dstarlite.initialize(startCell, targetCell);
 					robot.updatePos(startCell, cellSize);
+                    robot.seenObstacles.clear();
                     robot.resetPathLength();
                     getPixelPath(dstarlite, robot);
                     break;
                 case sf::Keyboard::Key::T:
                     // Set the target point
                     targetCell = selectedCell;
-                    dstarlite.initialize(gridMap, startCell, targetCell);
+                    dstarlite.initialize(startCell, targetCell);
 					robot.updatePos(startCell, cellSize);
+                    robot.seenObstacles.clear();
                     robot.resetPathLength();
                     getPixelPath(dstarlite, robot);
                     break;
@@ -75,8 +77,9 @@ void GridMap::eventHandler(sf::RenderWindow& window, Position& selectedCell, Rob
                 case sf::Keyboard::Key::R:
                     // Generate a new random map
                     randomize();
-                    dstarlite.initialize(gridMap, startCell, targetCell);
+                    dstarlite.initialize(startCell, targetCell);
 					robot.updatePos(startCell, cellSize);
+                    robot.seenObstacles.clear();
                     robot.resetPathLength();
                     getPixelPath(dstarlite, robot);
                     break;
@@ -94,16 +97,18 @@ void GridMap::eventHandler(sf::RenderWindow& window, Position& selectedCell, Rob
                 {
                     // Generate a new random map
                     randomize();
-                    dstarlite.initialize(gridMap, startCell, targetCell);
+                    dstarlite.initialize(startCell, targetCell);
 					robot.updatePos(startCell, cellSize);
+                    robot.seenObstacles.clear();
                     robot.resetPathLength();
                     getPixelPath(dstarlite, robot);
                 }
                 if (keyEvent->code == sf::Keyboard::Key::P)
                 {
 					// Generate the path
-                    dstarlite.initialize(gridMap, startCell, targetCell);
+                    dstarlite.initialize(startCell, targetCell);
                     robot.updatePos(startCell, cellSize);
+                    robot.seenObstacles.clear();
                     robot.resetPathLength();
 					getPixelPath(dstarlite, robot);
                 }
@@ -128,12 +133,12 @@ void GridMap::visualize()
     
     Position selectedCell(-1, -1);
 
-	Robot robot(startCell, 100.0f, cellSize * 2.0f);
+	Robot robot(startCell, 100.0f, cellSize * 4, cellSize * 3, cellSize * 2, 0);
 	robot.updatePos(startCell, cellSize);
 
 	AStar astar(gridMap, startCell, targetCell);
-	DStarLite dstarlite(gridMap, startCell, targetCell);
-	dstarlite.initialize(gridMap, startCell, targetCell);
+	DStarLite dstarlite(Position(cols, rows));
+	dstarlite.initialize(startCell, targetCell);
 
     while (window.isOpen())
     {
@@ -163,8 +168,7 @@ void GridMap::visualize()
             selectedPoint.setFillColor(sf::Color::Cyan);
             selectedPoint.setPosition(sf::Vector2f(static_cast<float>(selectedCell.x * cellSize), static_cast<float>(selectedCell.y * cellSize)));
             window.draw(selectedPoint); 
-        }
-
+        }		
         for (int y = 0; y < rows; ++y)
         {
             for (int x = 0; x < cols; ++x)
@@ -190,10 +194,19 @@ void GridMap::visualize()
             window.draw(pathLines);
         }
 
-        getPixelPath(dstarlite, robot);
-        robot.move(pixelPath);
-        robot.lookAhead(gridMap, pixelPath, gridPath, cellSize);
 
+        for (const auto& obs : robot.seenObstacles)
+        {
+            sf::CircleShape obstacleShape(static_cast<float>(cellSize) / 2.0f);
+            obstacleShape.setFillColor(sf::Color(118, 152, 224, 170));
+            obstacleShape.setPosition(sf::Vector2f(obs.x * static_cast<float>(cellSize), obs.y * static_cast<float>(cellSize)));
+            window.draw(obstacleShape);
+        }
+        std::vector<std::vector<CellType>> inflatedGrid = inflateObstacles(robot.getSafetyOffset());
+        robot.lookAhead(inflatedGrid, pixelPath, gridPath, cellSize);
+        if (robot.foundObstacle())
+            getPixelPath(dstarlite, robot);        
+        robot.move(pixelPath);
 		robot.draw(window, cellSize);
         window.display();
     }
@@ -203,12 +216,15 @@ void GridMap::getPixelPath(DStarLite& dstarlite, Robot& robot)
 {    
     if (robot.foundObstacle())
     {
+		robot.seenObstacles.push_back(robot.getObstaclePos());
         robot.resetObstacleFlag();
-        robot.resetPathLength();
-        dstarlite.updateObstacle(robot.getObstaclePos(), robot.getGridPosition(cellSize));    
+        robot.resetPathLength();  
+		dstarlite.updateCell(robot.getObstaclePos(), -1);
+		dstarlite.updateStart(robot.getGridPosition(cellSize));
     }
     pixelPath.clear();
     gridPath.clear();
+	dstarlite.replan();
     gridPath = dstarlite.getPath();
 
     for (const auto& pos : gridPath)
@@ -217,8 +233,6 @@ void GridMap::getPixelPath(DStarLite& dstarlite, Robot& robot)
             (pos.y + 0.5f) * static_cast<float>(cellSize)));
     }
     robot.calculatePathLength(pixelPath);
-
-    
 }
 
 void GridMap::getPixelPath(AStar& astar)
@@ -336,14 +350,61 @@ void GridMap::randomize()
         targetCell.x = distColTarget(gen);
         targetCell.y = distRowTarget(gen);
     } while (gridMap[targetCell.y][targetCell.x] == CellType::Obstacle || targetCell == startCell);
+    setWall();
 }
 
-Robot::Robot(const Position& pos, const float& speed, const float& visibleRadius)
-	: pos(pos), speed(speed), visibleRadius(visibleRadius)
+std::vector<std::vector<CellType>> GridMap::inflateObstacles(const float& inflationRadius)
+{
+	int offsetCells = static_cast<int>(std::ceil(inflationRadius / cellSize));
+
+    std::vector<std::vector<CellType>> inflatedGrid = gridMap;
+
+    for (int y = 0; y < rows; ++y)
+    {
+        for (int x = 0; x < cols; ++x)
+        {
+            if (gridMap[y][x] == CellType::Obstacle)
+            {
+                // Inflate the obstacle
+                for (int dy = -offsetCells; dy <= offsetCells; ++dy)
+                {
+                    for (int dx = -offsetCells; dx <= offsetCells; ++dx)
+                    {
+                        int nx = x + dx;
+                        int ny = y + dy;
+                        if (nx >= 0 && nx < cols && ny >= 0 && ny < rows)
+                        {
+                            inflatedGrid[ny][nx] = CellType::Obstacle;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // Update the grid map with the inflated obstacles
+    return inflatedGrid;
+}
+
+void GridMap::setWall()
+{
+    for (int y = 0; y < rows; ++y)
+    {
+        for (int x = 0; x < cols; ++x)
+        {
+            if (x == 0 || x == cols - 1 || y == 0 || y == rows - 1)
+                gridMap[y][x] = CellType::Obstacle;
+        }
+    }
+}
+
+Robot::Robot(const Position& pos, const float& speed, const float& visibleRadius, const float& length, const float& width, const float& offset)
+	: pos(pos), speed(speed), visibleRadius(visibleRadius), length(length), width(width)
 {
     totalPathLength = 0.0f;
     accumulatedDistance = 0.0f;
 	robotClock.restart();
+
+    safetyOffset = 0.5f * std::sqrt(length * length + width * width) + offset;
 }
 
 void Robot::calculatePathLength(const std::vector<sf::Vector2f>& path)
@@ -418,11 +479,17 @@ void Robot::draw(sf::RenderWindow& window, const int& cellSize)
     visibleArea.setPosition(sf::Vector2f(static_cast<float>(pos.x - visibleRadius), static_cast<float>(pos.y - visibleRadius)));
     window.draw(visibleArea);
 
-    float radius = static_cast<float>(cellSize) / 2.0f;
-    sf::CircleShape robotShape(radius);
+    /*sf::RectangleShape robotShape(sf::Vector2f(width, length));
     robotShape.setFillColor(sf::Color::Magenta);
-    robotShape.setPosition(sf::Vector2f(static_cast<float>(pos.x - radius), static_cast<float>(pos.y - radius)));
-    window.draw(robotShape);
+    robotShape.setOrigin(sf::Vector2f(width / 2.0f, length / 2.0f));
+    robotShape.setPosition(sf::Vector2f(pos.x, pos.y));
+    window.draw(robotShape);*/
+
+	sf::CircleShape robotShape(length / 2.0f);
+	robotShape.setFillColor(sf::Color::Magenta);
+	robotShape.setOrigin(sf::Vector2f(length / 2.0f, length / 2.0f));
+	robotShape.setPosition(sf::Vector2f(pos.x, pos.y));
+	window.draw(robotShape);
 }
 
 void Robot::updatePos(const Position& start, const int& cellSize)
@@ -470,14 +537,12 @@ void Robot::lookAhead(std::vector<std::vector<CellType>>& gridMap, const std::ve
 	}
 }
 
-
-
 int main()
 {
     // Define the size of the window and grid
-    int cellSize = 100;
-    int rows = 8;
-    int cols = 10;
+    int cellSize = 20;
+    int rows = 60;
+    int cols = 80;
     GridMap gridMap(cellSize, rows, cols);
     gridMap.randomize();
     gridMap.visualize();
@@ -485,6 +550,6 @@ int main()
 }
 
 // TODO:
-// 1. Add the visible area around the robot
-// 2. Add the ability to recalculate the path when the robot sees obstacles in the way
-// 3. Add the D* Lite algorithm to replace A*
+// 1. Add dimensions for the robot
+// 2. Add safety distance for the robot
+// 3. Use camera with markers to simulate the visible area of the robot
