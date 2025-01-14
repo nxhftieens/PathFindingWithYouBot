@@ -2,169 +2,174 @@
 //
 
 #include "../include/GridMap.hpp"
-#include "../src/AStar.cpp"
 
-int main()
+
+GridMap::GridMap(const int& cellSize, const int& rows, const int& cols)
+    : cellSize(cellSize), rows(rows), cols(cols)
 {
-    // Define the size of the window and grid
-    int cellSize = 10;
-    int rows = 120;
-    int cols = 160;
-    GridMapVisualize(cellSize, rows, cols);
-    return 0;
+    gridMap.resize(rows, std::vector<CellType>(cols, CellType::Empty));
 }
 
-// Function to visualize the grid map
-void GridMapVisualize(int cellSize,
-                        int rows,
-                        int cols)
+void GridMap::eventHandler(sf::RenderWindow& window, Position& selectedCell, Robot& robot, DStarLite& dstarlite)
+{
+    while(const std::optional<sf::Event> event = window.pollEvent())
+    {
+        if (event->is<sf::Event::Closed>())
+            window.close();
+
+        if (event->is<sf::Event::MouseButtonPressed>())
+        {
+            auto mouseEvent = event->getIf<sf::Event::MouseButtonPressed>();
+            int x = mouseEvent->position.x / cellSize;
+            int y = mouseEvent->position.y / cellSize;
+
+            // Check if the cell is within bounds
+            if (x >= 0 && x < cols && y >= 0 && y < rows)
+            {
+                // Set the selected cell
+                selectedCell = Position(x, y);
+            }
+        }
+
+        if (event->is<sf::Event::KeyPressed>())
+        {
+            auto keyEvent = event->getIf<sf::Event::KeyPressed>();
+
+            // Check if a cell is selected
+            if (selectedCell.x != -1 && selectedCell.y != -1)
+            {
+                // Determine the action based on the key pressed
+                switch (keyEvent->code)
+                {
+                case sf::Keyboard::Key::S:
+                    // Set the start point
+                    startCell = selectedCell;
+                    dstarlite.initialize(gridMap, startCell, targetCell);
+					robot.updatePos(startCell, cellSize);
+                    robot.resetPathLength();
+                    getPixelPath(dstarlite, robot);
+                    break;
+                case sf::Keyboard::Key::T:
+                    // Set the target point
+                    targetCell = selectedCell;
+                    dstarlite.initialize(gridMap, startCell, targetCell);
+					robot.updatePos(startCell, cellSize);
+                    robot.resetPathLength();
+                    getPixelPath(dstarlite, robot);
+                    break;
+                case sf::Keyboard::Key::O:
+                    // Toggle obstacle
+                    if (gridMap[selectedCell.y][selectedCell.x] == CellType::Empty)
+                        gridMap[selectedCell.y][selectedCell.x] = CellType::Obstacle;
+                    else
+                        gridMap[selectedCell.y][selectedCell.x] = CellType::Empty;
+                    break;
+                case sf::Keyboard::Key::E:
+                    // Clear the cell
+                    if (startCell == selectedCell)
+                        startCell = Position(-1, -1);
+                    if (targetCell == selectedCell)
+                        targetCell = Position(-1, -1);
+                    gridMap[selectedCell.y][selectedCell.x] = CellType::Empty;
+                    break;
+                case sf::Keyboard::Key::R:
+                    // Generate a new random map
+                    randomize();
+                    dstarlite.initialize(gridMap, startCell, targetCell);
+					robot.updatePos(startCell, cellSize);
+                    robot.resetPathLength();
+                    getPixelPath(dstarlite, robot);
+                    break;
+                default:
+                    break;
+                }
+
+                // Reset the selected cell after action
+                selectedCell = Position(-1, -1);
+            }
+            else
+            {
+                // If no cell is selected
+                if (keyEvent->code == sf::Keyboard::Key::R)
+                {
+                    // Generate a new random map
+                    randomize();
+                    dstarlite.initialize(gridMap, startCell, targetCell);
+					robot.updatePos(startCell, cellSize);
+                    robot.resetPathLength();
+                    getPixelPath(dstarlite, robot);
+                }
+                if (keyEvent->code == sf::Keyboard::Key::P)
+                {
+					// Generate the path
+                    dstarlite.initialize(gridMap, startCell, targetCell);
+                    robot.updatePos(startCell, cellSize);
+                    robot.resetPathLength();
+					getPixelPath(dstarlite, robot);
+                }
+                if (keyEvent->code == sf::Keyboard::Key::M)
+                {
+					// Toggle the moving flag
+					robot.movingFlagToggle();
+					std::cout << "Moving flag toggled"  << std::endl;
+                }
+            }
+        }
+    }
+}
+
+void GridMap::visualize() 
 {
     const unsigned int gridWidth = cols * cellSize;
     const unsigned int gridHeight = rows * cellSize;
 
     // Create the SFML window
     sf::RenderWindow window(sf::VideoMode({ gridWidth, gridHeight }), "Grid Map");
+    
+    Position selectedCell(-1, -1);
 
-    // Create a 2D vector to hold the cell types
-    std::vector<std::vector<CellType>> grid(rows, std::vector<CellType>(cols, CellType::Empty));
+	Robot robot(startCell, 100.0f, cellSize * 2.0f);
+	robot.updatePos(startCell, cellSize);
 
-    // Variables to store start and target cell positions
-    sf::Vector2i startCell(-1, -1);
-    sf::Vector2i targetCell(-1, -1);
+	AStar astar(gridMap, startCell, targetCell);
+	DStarLite dstarlite(gridMap, startCell, targetCell);
+	dstarlite.initialize(gridMap, startCell, targetCell);
 
-    // Generate random map
-    GenerateRandomMap(grid, startCell, targetCell, rows, cols);
-
-    // Variable to store the selected cell
-    sf::Vector2i selectedCell(-1, -1);
-
-    // Variable to store the path generation time
-    double pathGenerationTime = 0.0;
-
-    // Variable to store the generated path
-    std::vector<sf::Vector2f> path;
-
-    // Flag to indicate if the path needs to be updated
-    bool pathNeedsUpdate = true;
-
-    //Flag to indicate if the robot need to move
-    bool robotNeedsMove = false;
-
-    // Variables for robot movement
-    size_t robotPathIndex = 0;
-    float robotSpeed = 100.0f; // Speed in grids per second
-    sf::Clock robotClock;
-    float accumulatedDistance = 0.0f;
-    float totalPathLength = 0.0f;
-    float distanceCovered = 0.0f;
-    std::vector<float> segmentLengths;
-
-    // Main loop
     while (window.isOpen())
     {
-        while (const std::optional<sf::Event> event = window.pollEvent())
-        {
-            if (event->is<sf::Event::Closed>())
-                window.close();
-
-            if (event->is<sf::Event::MouseButtonPressed>())
-            {
-                auto mouseEvent = event->getIf<sf::Event::MouseButtonPressed>();
-                int x = mouseEvent->position.x / cellSize;
-                int y = mouseEvent->position.y / cellSize;
-
-                // Check if the cell is within bounds
-                if (x >= 0 && x < cols && y >= 0 && y < rows)
-                {
-                    // Set the selected cell
-                    selectedCell = sf::Vector2i(x, y);
-                }
-            }
-
-            if (event->is<sf::Event::KeyPressed>())
-            {
-                auto keyEvent = event->getIf<sf::Event::KeyPressed>();
-
-                // Check if a cell is selected
-                if (selectedCell.x != -1 && selectedCell.y != -1)
-                {
-                    // Determine the action based on the key pressed
-                    switch (keyEvent->code)
-                    {
-                    case sf::Keyboard::Key::S:
-                        // Set the start point
-                        startCell = selectedCell;
-                        pathNeedsUpdate = true;
-                        break;
-                    case sf::Keyboard::Key::T:
-                        // Set the target point
-                        targetCell = selectedCell;
-                        pathNeedsUpdate = true;
-                        break;
-                    case sf::Keyboard::Key::O:
-                        // Toggle obstacle
-                        if (grid[selectedCell.y][selectedCell.x] == CellType::Empty)
-                            grid[selectedCell.y][selectedCell.x] = CellType::Obstacle;
-                        else
-                            grid[selectedCell.y][selectedCell.x] = CellType::Empty;
-                        pathNeedsUpdate = true;
-                        break;
-                    case sf::Keyboard::Key::E:
-                        // Clear the cell
-                        if (startCell == selectedCell)
-                            startCell = sf::Vector2i(-1, -1);
-                        if (targetCell == selectedCell)
-                            targetCell = sf::Vector2i(-1, -1);
-                        grid[selectedCell.y][selectedCell.x] = CellType::Empty;
-                        pathNeedsUpdate = true;
-                        break;
-                    case sf::Keyboard::Key::R:
-                        // Generate a new random map
-                        GenerateRandomMap(grid, startCell, targetCell, rows, cols);
-                        pathNeedsUpdate = true;
-                        break;
-                    default:
-                        break;
-                    }
-
-                    // Reset the selected cell after action
-                    selectedCell = sf::Vector2i(-1, -1);
-                }
-                else
-                {
-                    // If no cell is selected
-                    if (keyEvent->code == sf::Keyboard::Key::R)
-                    {
-                        // Generate a new random map
-                        GenerateRandomMap(grid, startCell, targetCell, rows, cols);
-                        pathNeedsUpdate = true;
-                    }
-                    if (keyEvent->code == sf::Keyboard::Key::Space)
-                    {
-                        // Toggle robot movement
-                        robotNeedsMove = !robotNeedsMove;
-                    }
-                    if (keyEvent->code == sf::Keyboard::Key::C)
-                    {
-                        // Reset robot movement variables
-                        robotPathIndex = 0;
-                        accumulatedDistance = 0.0f;
-                        totalPathLength = 0.0f;
-                        distanceCovered = 0.0f;
-                    }
-                }
-            }
-        }
-
-        // Clear the window
         window.clear(sf::Color::White);
 
-        // Draw obstacles
+        eventHandler(window, selectedCell, robot, dstarlite);
+        
+        if (startCell.x != -1 && startCell.y != -1)
+        {
+            sf::CircleShape startPoint(static_cast<float>(cellSize) / 2.0f);
+            startPoint.setFillColor(sf::Color::Blue);
+            startPoint.setPosition(sf::Vector2f(static_cast<float>(startCell.x * cellSize), static_cast<float>(startCell.y * cellSize)));
+            window.draw(startPoint);
+        }
+
+        if (targetCell.x != -1 && targetCell.y != -1)
+        {
+            sf::CircleShape targetPoint(static_cast<float>(cellSize) / 2.0f);
+            targetPoint.setFillColor(sf::Color::Red);
+            targetPoint.setPosition(sf::Vector2f(static_cast<float>(targetCell.x * cellSize), static_cast<float>(targetCell.y * cellSize)));
+            window.draw(targetPoint);
+        }
+
+        if (selectedCell.x != -1 && selectedCell.y != -1)
+        {
+            sf::RectangleShape selectedPoint(sf::Vector2f(static_cast<float>(cellSize), static_cast<float>(cellSize)));
+            selectedPoint.setFillColor(sf::Color::Cyan);
+            selectedPoint.setPosition(sf::Vector2f(static_cast<float>(selectedCell.x * cellSize), static_cast<float>(selectedCell.y * cellSize)));
+            window.draw(selectedPoint); 
+        }
+
         for (int y = 0; y < rows; ++y)
         {
             for (int x = 0; x < cols; ++x)
-            {
-                if (grid[y][x] == CellType::Obstacle)
+            {                
+                if (gridMap[y][x] == CellType::Obstacle)
                 {
                     sf::RectangleShape cellShape(sf::Vector2f(static_cast<float>(cellSize), static_cast<float>(cellSize)));
                     cellShape.setPosition(sf::Vector2f(static_cast<float>(x * cellSize), static_cast<float>(y * cellSize)));
@@ -174,153 +179,72 @@ void GridMapVisualize(int cellSize,
             }
         }
 
-        // Draw start point
-        if (startCell.x != -1 && startCell.y != -1)
+        if (!pixelPath.empty())
         {
-            sf::CircleShape startPoint(static_cast<float>(cellSize) / 2.0f);
-            startPoint.setFillColor(sf::Color::Blue);
-            startPoint.setPosition(sf::Vector2f(static_cast<float>(startCell.x * cellSize), static_cast<float>(startCell.y * cellSize)));
-            window.draw(startPoint);
-        }
-
-        // Draw target point
-        if (targetCell.x != -1 && targetCell.y != -1)
-        {
-            sf::CircleShape targetPoint(static_cast<float>(cellSize) / 2.0f);
-            targetPoint.setFillColor(sf::Color::Red);
-            targetPoint.setPosition(sf::Vector2f(static_cast<float>(targetCell.x * cellSize), static_cast<float>(targetCell.y * cellSize)));
-            window.draw(targetPoint);
-        }
-
-        // Draw the path if start and target are set
-        if (pathNeedsUpdate && startCell.x != -1 && targetCell.x != -1)
-        {
-            auto startTime = std::chrono::high_resolution_clock::now();
-
-            path = GeneratePathAStar(grid, startCell, targetCell, cellSize, rows, cols);
-
-			auto endTime = std::chrono::high_resolution_clock::now();
-			pathGenerationTime = std::chrono::duration<double, std::milli>(endTime - startTime).count();
-            window.setTitle("Grid Map - Path Generation Time: " + std::to_string(pathGenerationTime) + " ms");
-            
-            // Reset robot movement variables
-            robotPathIndex = 0;
-            accumulatedDistance = 0.0f;
-            totalPathLength = 0.0f;
-            distanceCovered = 0.0f;
-            segmentLengths.clear();
-            robotClock.restart();
-
-            // Calculate segment lengths
-            if (!path.empty())
+            sf::VertexArray pathLines(sf::PrimitiveType::LineStrip, pixelPath.size());
+            for (size_t i = 0; i < pixelPath.size(); ++i)
             {
-                for (size_t i = 0; i < path.size() - 1; ++i)
-                {
-                    float segmentLengthPixels = std::hypot(
-                        path[i + 1].x - path[i].x,
-                        path[i + 1].y - path[i].y
-                    );
-                    //float segmentLengthGrids = segmentLengthPixels / static_cast<float>(cellSize);
-                    segmentLengths.push_back(segmentLengthPixels);
-                    totalPathLength += segmentLengthPixels;
-                }
-            }
-
-            pathNeedsUpdate = false;
-        }
-
-        // Draw the path
-        if (!path.empty())
-        {
-            sf::VertexArray pathLines(sf::PrimitiveType::LineStrip, path.size());
-            for (size_t i = 0; i < path.size(); ++i)
-            {
-                pathLines[i].position = path[i];
+                pathLines[i].position = pixelPath[i];
                 pathLines[i].color = sf::Color::Green;
             }
             window.draw(pathLines);
         }
 
-        // Update and draw the robot
-        if (!path.empty() && !segmentLengths.empty())
-        {
-            float deltaTime = robotClock.restart().asSeconds();
+        getPixelPath(dstarlite, robot);
+        robot.move(pixelPath);
+        robot.lookAhead(gridMap, pixelPath, gridPath, cellSize);
 
-            if (robotNeedsMove) {
-                // Move the robot along the path
-                float distanceToMove = robotSpeed * deltaTime;
-                accumulatedDistance += distanceToMove;
-
-                // Find the current segment based on accumulated distance
-                while (robotPathIndex < segmentLengths.size() && accumulatedDistance > distanceCovered + segmentLengths[robotPathIndex])
-                {
-                    distanceCovered += segmentLengths[robotPathIndex];
-                    ++robotPathIndex;
-                }
-            }
-            
-            /*
-            // Check if robot has reached the end of the path
-            if (robotPathIndex >= segmentLengths.size() - 1)
-            {
-                // Optionally, reset the robot to start again
-                robotPathIndex = 0;
-                accumulatedDistance = 0.0f;
-                distanceCovered = 0.0f;
-            }
-            */
-
-            // Interpolate the robot's position between the two points
-            sf::Vector2f robotPosition;
-            robotPosition.x = -1;
-            robotPosition.y = -1;
-            if (robotPathIndex <= segmentLengths.size() - 1)
-            {
-                float segmentProgress = (accumulatedDistance - distanceCovered) / segmentLengths[robotPathIndex];
-                robotPosition = path[robotPathIndex] + (path[robotPathIndex + 1] - path[robotPathIndex]) * segmentProgress;
-            }
-            else
-            {
-                robotPosition = path.back();
-            }
-
-            // Draw the robot as a circle
-            sf::CircleShape robotShape(static_cast<float>(cellSize) / 2.0f);
-            robotShape.setFillColor(sf::Color::Magenta);
-            robotShape.setPosition(robotPosition - sf::Vector2f(static_cast<float>(cellSize) / 2.0f, static_cast<float>(cellSize) / 2.0f));
-            window.draw(robotShape);
-        }
-
-        // Highlight the selected cell
-        if (selectedCell.x != -1 && selectedCell.y != -1)
-        {
-            sf::RectangleShape highlight(sf::Vector2f(static_cast<float>(cellSize), static_cast<float>(cellSize)));
-            highlight.setPosition(sf::Vector2f(static_cast<float>(selectedCell.x * cellSize), static_cast<float>(selectedCell.y * cellSize)));
-            highlight.setFillColor(sf::Color(255, 255, 0, 128)); // Semi-transparent yellow
-            window.draw(highlight);
-        }
-
-        // Display the contents of the window
+		robot.draw(window, cellSize);
         window.display();
     }
 }
 
-// Function to generate random start, target, and obstacles
-void GenerateRandomMap(std::vector<std::vector<CellType>>& grid,
-                        sf::Vector2i& startCell,
-                        sf::Vector2i& targetCell,
-                        int rows,
-                        int cols)
+void GridMap::getPixelPath(DStarLite& dstarlite, Robot& robot)
+{    
+    if (robot.foundObstacle())
+    {
+        robot.resetObstacleFlag();
+        robot.resetPathLength();
+        dstarlite.updateObstacle(robot.getObstaclePos(), robot.getGridPosition(cellSize));    
+    }
+    pixelPath.clear();
+    gridPath.clear();
+    gridPath = dstarlite.getPath();
+
+    for (const auto& pos : gridPath)
+    {
+        pixelPath.push_back(sf::Vector2f((pos.x + 0.5f) * static_cast<float>(cellSize),
+            (pos.y + 0.5f) * static_cast<float>(cellSize)));
+    }
+    robot.calculatePathLength(pixelPath);
+
+    
+}
+
+void GridMap::getPixelPath(AStar& astar)
+{
+    pixelPath.clear();
+    gridPath.clear();
+
+    gridPath = astar.getPath();
+    for (const auto& pos : gridPath)
+    {
+        pixelPath.push_back(sf::Vector2f((pos.x + 0.5f) * static_cast<float>(cellSize),
+            (pos.y + 0.5f) * static_cast<float>(cellSize)));
+    }
+}
+
+void GridMap::randomize()
 {
     // Reset grid
     for (int y = 0; y < rows; ++y)
     {
-        std::fill(grid[y].begin(), grid[y].end(), CellType::Empty);
+        std::fill(gridMap[y].begin(), gridMap[y].end(), CellType::Empty);
     }
 
     // Reset start and target positions
-    startCell = sf::Vector2i(-1, -1);
-    targetCell = sf::Vector2i(-1, -1);
+    startCell = Position(-1, -1);
+    targetCell = Position(-1, -1);
 
     // Random number generators
     std::random_device rd;
@@ -328,39 +252,35 @@ void GenerateRandomMap(std::vector<std::vector<CellType>>& grid,
     std::uniform_int_distribution<> distRow(0, rows - 1);
     std::uniform_int_distribution<> distCol(0, cols - 1);
 
-    // Generate shapes
     int numberOfShapes = 20; // Adjust the number of obstacle shapes
+
     for (int i = 0; i < numberOfShapes; ++i)
     {
-        // Randomly choose a shape type
-        int shapeType = i % 6; // 0: rectangle, 1: square, 2: circle, 3: ellipse, 4: U-shape, 5: V-shape, 6: triangle
+        int shapeType = i % 6;
 
-        // Random position and size
         int posX = distCol(gen);
         int posY = distRow(gen);
         int sizeX = distCol(gen) % (cols / 4) + cols / 10;
         int sizeY = distRow(gen) % (rows / 4) + rows / 10;
+
+        int radius = std::min(sizeX, sizeY) / 2;
+        int centerX = posX + radius;
+        int centerY = posY + radius;
 
         switch (shapeType)
         {
         case 0: // Rectangle
             for (int y = posY; y < posY + sizeY && y < rows; ++y)
                 for (int x = posX; x < posX + sizeX && x < cols; ++x)
-                    grid[y][x] = CellType::Obstacle;
+                    gridMap[y][x] = CellType::Obstacle;
             break;
-
         case 1: // Square
             sizeX = sizeY = std::min(sizeX, sizeY);
             for (int y = posY; y < posY + sizeY && y < rows; ++y)
                 for (int x = posX; x < posX + sizeX && x < cols; ++x)
-                    grid[y][x] = CellType::Obstacle;
+                    gridMap[y][x] = CellType::Obstacle;
             break;
-
-        case 2: // Circle
-        {
-            int radius = std::min(sizeX, sizeY) / 2;
-            int centerX = posX + radius;
-            int centerY = posY + radius;
+        case 2: // Circle                    
             for (int y = std::max(0, centerY - radius); y <= std::min(rows - 1, centerY + radius); ++y)
             {
                 for (int x = std::max(0, centerX - radius); x <= std::min(cols - 1, centerX + radius); ++x)
@@ -368,66 +288,32 @@ void GenerateRandomMap(std::vector<std::vector<CellType>>& grid,
                     int dx = x - centerX;
                     int dy = y - centerY;
                     if (dx * dx + dy * dy <= radius * radius)
-                        grid[y][x] = CellType::Obstacle;
+                        gridMap[y][x] = CellType::Obstacle;
                 }
             }
-        }
-        break;
-
-        case 3: // Ellipse
-        {
-            int radiusX = sizeX / 2;
-            int radiusY = sizeY / 2;
-            int centerX = posX + radiusX;
-            int centerY = posY + radiusY;
-            for (int y = std::max(0, centerY - radiusY); y <= std::min(rows - 1, centerY + radiusY); ++y)
-            {
-                for (int x = std::max(0, centerX - radiusX); x <= std::min(cols - 1, centerX + radiusX); ++x)
-                {
-                    int dx = x - centerX;
-                    int dy = y - centerY;
-                    if ((dx * dx) * (radiusY * radiusY) + (dy * dy) * (radiusX * radiusX) <= (radiusX * radiusX) * (radiusY * radiusY))
-                        grid[y][x] = CellType::Obstacle;
-                }
-            }
-        }
-        break;
-
-        case 4: // U-shape
+            break;
+        case 3: // U-shape
             for (int y = posY; y < posY + sizeY && y < rows; ++y)
             {
                 for (int x = posX; x < posX + sizeX && x < cols; ++x)
                 {
-                    if (x < posX + 2 || x >= posX + sizeX - 2 || (y >= posY + sizeY - 2))
-                        grid[y][x] = CellType::Obstacle;
+                    if (x < posX + 4 || x >= posX + sizeX - 4 || (y >= posY + sizeY - 4))
+                        gridMap[y][x] = CellType::Obstacle;
                 }
             }
             break;
-
-        //case 5: // V-shape
-        //    for (int y = 0; y < sizeY && posY + y < rows; ++y)
-        //    {
-        //        int offset = y / 2;
-        //        if (posX + offset < cols)
-        //            grid[posY + y][posX + offset] = CellType::Obstacle;
-        //        if (posX + sizeX - offset - 1 < cols)
-        //            grid[posY + y][posX + sizeX - offset - 1] = CellType::Obstacle;
-        //    }
-        //    break;
-
-        case 5: // Triangle
+        case 4: //Triangle
             for (int y = 0; y < sizeY && posY + y < rows; ++y)
             {
-                int startX = posX + sizeX / 2 - y * sizeX / (2 * sizeY);
-                int endX = posX + sizeX / 2 + y * sizeX / (2 * sizeY);
+                int startX = posX + sizeX / 3 - y * sizeX / (3 * sizeY);
+                int endX = posX + sizeX / 3 + y * sizeX / (3 * sizeY);
                 for (int x = startX; x <= endX && x < cols; ++x)
                 {
                     if (x >= 0)
-                        grid[posY + y][x] = CellType::Obstacle;
+                        gridMap[posY + y][x] = CellType::Obstacle;
                 }
             }
             break;
-
         default:
             break;
         }
@@ -440,7 +326,7 @@ void GenerateRandomMap(std::vector<std::vector<CellType>>& grid,
     {
         startCell.x = distColStart(gen);
         startCell.y = distRowStart(gen);
-    } while (grid[startCell.y][startCell.x] == CellType::Obstacle);
+    } while (gridMap[startCell.y][startCell.x] == CellType::Obstacle);
 
     // Random target position
     std::uniform_int_distribution<> distRowTarget(0, rows - 1);
@@ -449,5 +335,156 @@ void GenerateRandomMap(std::vector<std::vector<CellType>>& grid,
     {
         targetCell.x = distColTarget(gen);
         targetCell.y = distRowTarget(gen);
-    } while (grid[targetCell.y][targetCell.x] == CellType::Obstacle || targetCell == startCell);
+    } while (gridMap[targetCell.y][targetCell.x] == CellType::Obstacle || targetCell == startCell);
 }
+
+Robot::Robot(const Position& pos, const float& speed, const float& visibleRadius)
+	: pos(pos), speed(speed), visibleRadius(visibleRadius)
+{
+    totalPathLength = 0.0f;
+    accumulatedDistance = 0.0f;
+	robotClock.restart();
+}
+
+void Robot::calculatePathLength(const std::vector<sf::Vector2f>& path)
+{	
+	if (!path.empty())
+	{
+		for (size_t i = 0; i < path.size() - 1; ++i)
+		{
+			float segmentLengthPixels = std::hypot(
+				path[i + 1].x - path[i].x,
+				path[i + 1].y - path[i].y
+			);
+			segmentLengths.push_back(segmentLengthPixels);
+			totalPathLength += segmentLengthPixels;
+		}
+	}
+}
+
+void Robot::resetPathLength()
+{
+	segmentLengths.clear();
+	totalPathLength = 0.0f;
+    accumulatedDistance = 0.0f;
+    robotClock.restart();
+}
+
+void Robot::move(const std::vector<sf::Vector2f>& pixelPath)
+{
+    float deltaTime = robotClock.restart().asSeconds();
+    if (!pixelPath.empty() && !segmentLengths.empty() && moving)
+    {
+        float distanceToMove = speed * deltaTime;
+        accumulatedDistance += distanceToMove;
+
+		float distanceCovered = 0.0f;
+		int robotPathIndex = 0;
+
+        // Find the current segment based on accumulated distance
+        while (robotPathIndex < segmentLengths.size() && accumulatedDistance > distanceCovered + segmentLengths[robotPathIndex])
+        {
+            distanceCovered += segmentLengths[robotPathIndex];
+            ++robotPathIndex;
+        }
+
+        // Interpolate the robot's position between the two points
+        if (robotPathIndex < segmentLengths.size())
+        {   
+            if (robotPathIndex + 1 < pixelPath.size())
+            {
+                float segmentProgress = (accumulatedDistance - distanceCovered) / segmentLengths[robotPathIndex];
+                float x = pixelPath[robotPathIndex].x + (pixelPath[robotPathIndex + 1].x - pixelPath[robotPathIndex].x) * segmentProgress;
+                float y = pixelPath[robotPathIndex].y + (pixelPath[robotPathIndex + 1].y - pixelPath[robotPathIndex].y) * segmentProgress;
+                pos.x = static_cast<int>(x);
+                pos.y = static_cast<int>(y);
+            }
+            else
+            {
+				pos = Position(pixelPath.back().x, pixelPath.back().y);
+            }
+        }
+        else
+        {
+            pos = Position(pixelPath.back().x, pixelPath.back().y);
+        }
+    }
+}
+
+void Robot::draw(sf::RenderWindow& window, const int& cellSize)
+{
+    sf::CircleShape visibleArea(visibleRadius);
+    visibleArea.setFillColor(sf::Color(224, 131, 179, 100));
+    visibleArea.setPosition(sf::Vector2f(static_cast<float>(pos.x - visibleRadius), static_cast<float>(pos.y - visibleRadius)));
+    window.draw(visibleArea);
+
+    float radius = static_cast<float>(cellSize) / 2.0f;
+    sf::CircleShape robotShape(radius);
+    robotShape.setFillColor(sf::Color::Magenta);
+    robotShape.setPosition(sf::Vector2f(static_cast<float>(pos.x - radius), static_cast<float>(pos.y - radius)));
+    window.draw(robotShape);
+}
+
+void Robot::updatePos(const Position& start, const int& cellSize)
+{
+    pos.x = (start.x + 0.5f) * static_cast<float>(cellSize);
+    pos.y = (start.y + 0.5f) * static_cast<float>(cellSize);
+}
+
+void Robot::lookAhead(std::vector<std::vector<CellType>>& gridMap, const std::vector<sf::Vector2f>& pixelPath, const std::vector<Position>& gridPath, const int& cellSize)
+{
+	if (!pixelPath.empty() && !gridPath.empty() && pos != Position(pixelPath.back().x, pixelPath.back().y))
+	{
+        std::vector<Position> visiblePath;
+        for (size_t i = 0; i < pixelPath.size() - 1; ++i)
+        {
+            if (std::pow(pixelPath[i].x - pos.x, 2) + std::pow(pixelPath[i].y - pos.y, 2) <= std::pow(visibleRadius, 2))
+            {
+                visiblePath.push_back(gridPath[i]);
+				//std::cout << "Visible path: " << gridPath[i].x << " " << gridPath[i].y << std::endl;
+            }
+        }
+        for (auto it = visiblePath.begin(); it != visiblePath.end();)
+        {
+            if (gridMap[it->y][it->x] == CellType::Obstacle)
+            {
+                sawObstacle = true;
+                obstaclePos = *it;
+                std::cout << "Obstacle found at: " << it->x << " " << it->y << std::endl;
+                return;
+            }
+            
+            if (std::pow((it->x + 0.5f) * static_cast<float>(cellSize) - pos.x, 2) + std::pow((it->y + 0.5f) * static_cast<float>(cellSize) - pos.y, 2) > std::pow(visibleRadius, 2))
+            {
+                it = visiblePath.erase(it);
+            }
+            else 
+            {
+				++it;
+            }
+        }
+        if (visiblePath.empty())
+        {
+            sawObstacle = false;
+        }
+	}
+}
+
+
+
+int main()
+{
+    // Define the size of the window and grid
+    int cellSize = 100;
+    int rows = 8;
+    int cols = 10;
+    GridMap gridMap(cellSize, rows, cols);
+    gridMap.randomize();
+    gridMap.visualize();
+    return 0;
+}
+
+// TODO:
+// 1. Add the visible area around the robot
+// 2. Add the ability to recalculate the path when the robot sees obstacles in the way
+// 3. Add the D* Lite algorithm to replace A*
