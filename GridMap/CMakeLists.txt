@@ -4,8 +4,12 @@
 
 # Add source to this project's executable.
 add_executable (GridMap "src/GridMap.cpp"
+                        "src/A-star.cpp"
+                        "src/D-starLite.cpp"
                         "include/GridMap.hpp"
-                        )
+                        "include/A-star.hpp"
+                        "include/D-starLite.hpp"
+                        "include/Element.hpp")
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)
   set_property(TARGET GridMap PROPERTY CXX_STANDARD 20)
