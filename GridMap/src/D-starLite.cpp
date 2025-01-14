@@ -7,113 +7,119 @@ DStarLite::DStarLite(const std::vector<std::vector<CellType>>& grid, const Posit
     rows = grid.size();
     cols = grid[0].size();
     km = 0.0f;
-
-    for (int y = 0; y < rows; ++y) {
-        for (int x = 0; x < cols; ++x)
-        {
-            Position pos(x, y);
-            g[pos] = INF;
-            rhs[pos] = INF;
-        }
-    }
-
-    rhs[targetCell] = 0.0f;
-    keys[targetCell] = calculateKey(targetCell);
-    openList.insert({ keys[targetCell], targetCell });
 }
 
-float DStarLite::heuristic(const Position& a, const Position& b)
+float DStarLite::heuristic(const Position& current, const Position& startCell)
 {
-    return std::sqrt(std::pow(a.x - b.x, 2) + std::pow(a.y - b.y, 2));
+	Position posA = current;
+	Position posB = startCell;
+    return std::sqrt(std::pow(posA.x - posB.x, 2) + std::pow(posA.y - posB.y, 2));
 }
 
-Key DStarLite::calculateKey(const Position& u)
+Key DStarLite::calculateKey(NodeDS* u)
 {
-    float gValue = std::min(g[u], rhs[u]);
-    return Key(gValue + heuristic(u, startCell) + km, gValue);
+    float gValue = std::min(u->g, u->rhs);
+    return Key(gValue + heuristic(u->pos, startCell) + km, gValue);
 }
 
-void DStarLite::updateVertex(const Position& u)
+void DStarLite::updateVertex(NodeDS* u)
 {
-    if (g[u] != rhs[u] && openList.contains({ keys[u], u }))
+    if (u->g != u->rhs && openList.contains(u))
     {
-        openList.erase(openList.find({ keys[u], u }));
-		keys[u] = calculateKey(u);
-		openList.insert({ keys[u], u });
+		//u->g = u->rhs;
+        u->key = calculateKey(u);
 	}
-	else if (g[u] != rhs[u] && !openList.contains({ keys[u], u }))
+	else if (u->g != u->rhs && !openList.contains(u))
 	{
-		keys[u] = calculateKey(u);
-		openList.insert({ keys[u], u });
+		//u->g = u->rhs;
+		u->key = calculateKey(u);
+		openList.insert(u);
 	}
-    else if (g[u] == rhs[u] && openList.contains({ keys[u], u }))
+    else if (u->g == u->rhs && openList.contains(u))
     {
-        openList.erase(openList.find({ keys[u], u }));
+        openList.erase(u);
     }
 }
 
 void DStarLite::computeShortestPath()
 {
-    
-    while (!openList.empty() && (openList.begin()->first > calculateKey(startCell) || rhs[startCell] != g[startCell]))
-    {
-		auto topElement = openList.begin();
-        Position topPosition = topElement->second;
-        // Debugging output
-        std::cout << "Processing node: (" << topPosition.x << ", " << topPosition.y << ")\n";
+	if (!openList.empty())
+	{
+		NodeDS* startNodeDS = allNodeDSs[startCell];
+        NodeDS* u = *openList.begin();
+		std::cout << "StartNode key: " << startNodeDS->key.k1 << "  " << startNodeDS->key.k2 << std::endl;
+        std::cout << "Top key: " << u->key.k1 << "  " << u->key.k2 << std::endl;
 
-        Key kOld = topElement->first;
-        Key kNew = calculateKey(topPosition);
+        while (u->key > calculateKey(startNodeDS) || startNodeDS->rhs > startNodeDS->g)
+        {
+            Position topPosition = u->pos;
+            // Debugging output
+            //std::cout << "Processing NodeDS: (" << topPosition.x << ", " << topPosition.y << ")\n";
 
-        if (kOld < kNew)
-        {
-            openList.erase(topElement);
-            openList.insert({ kNew, topPosition });
-        }
-        else if (g[topPosition] > rhs[topPosition])
-        {
-            g[topPosition] = rhs[topPosition];
-            openList.erase(topElement);
-            for (const auto& dir : directions)
+            Key kOld = u->key;
+            Key kNew = calculateKey(u);
+
+            if (kOld > kNew)
             {
-                Position neighbor = { topPosition.x + dir.x, topPosition.y + dir.y };
-                if (isValidCell(neighbor))
-                {
-                    if (neighbor != targetCell)
-                    {
-                        float cost = (dir.x == 0 || dir.y == 0) ? 1.0f : std::sqrt(2.0f);
-                        if (gridMap[neighbor.y][neighbor.x] == CellType::Obstacle)
-                            cost = INF;
-                        rhs[neighbor] = std::min(rhs[neighbor], g[topPosition] + cost);
-                    }
-                    updateVertex(neighbor);
-                }
+				u->key = kNew;
             }
-        }
-        else
-        {
-            float gOld = g[topPosition];
-            g[topPosition] = INF;
-            for (const auto& dir : directions)
+            else if (u->g > u->rhs)
             {
-                float cost = (dir.x == 0 || dir.y == 0) ? 1.0f : std::sqrt(2.0f);
-                Position neighbor = { topPosition.x + dir.x, topPosition.y + dir.y };
-                if (gridMap[neighbor.y][neighbor.x] == CellType::Obstacle)
-                    cost = INF;
-                if (isValidCell(neighbor))
-                {
-                    if (rhs[neighbor] == cost + gOld)
+                u->g = u->rhs;
+                for (const auto& pred : u->predecessors)
+                {    
+					if (pred->pos != targetCell)
+					{
+						pred->rhs = std::min(pred->rhs, u->g + costFunction(pred, u));
+					}
+                    updateVertex(pred);                    
+                }
+                openList.erase(u);
+			}
+			else
+			{
+                std::cout << "Okay till here\n";
+				float gOld = u->g;
+				u->g = INF;
+				std::vector<NodeDS*> preds = u->predecessors;
+				preds.push_back(u);
+				for (const auto& pred : preds)
+				{
+                    if (pred->rhs == costFunction(pred, u) + gOld)
                     {
-                        if (neighbor != targetCell)
+                        if (pred->pos != targetCell)
                         {
-                            rhs[topPosition] = std::min(rhs[topPosition], cost + gOld);
+							for (const auto& succ : pred->successors)
+							{
+								pred->rhs = std::min(pred->rhs, costFunction(pred, succ) + succ->g);
+							}
                         }
                     }
-                    updateVertex(neighbor);
-                }
-            }
-        }	
-    }    
+                    updateVertex(pred);
+				}
+			}
+            u = *openList.begin();
+        }
+	}
+
+    std::cout << "G map: " << std::endl;
+    for (int y = 0; y < rows; ++y)
+    {
+        for (int x = 0; x < cols; ++x)
+        {
+            std::cout << std::setw(5) << std::setprecision(2) << std::fixed << allNodeDSs[Position(x, y)]->g << " | ";
+        }
+        std::cout << std::endl;
+    }
+    std::cout << "RHS map: " << std::endl;
+    for (int y = 0; y < rows; ++y)
+    {
+        for (int x = 0; x < cols; ++x)
+        {
+            std::cout << std::setw(5) << std::setprecision(2) << std::fixed << allNodeDSs[Position(x, y)]->rhs << " | ";
+        }
+        std::cout << std::endl;
+    }
 }
 
 bool DStarLite::isValidCell(const Position& pos) const
@@ -130,29 +136,55 @@ void DStarLite::initialize(const std::vector<std::vector<CellType>>& grid,
 	targetCell = target;
     rows = grid.size();
     cols = grid[0].size();
-
-	g.clear();
-	rhs.clear();
 	openList.clear();
-	keys.clear();
+	allNodeDSs.clear();
     path.clear();
     km = 0.0f;
 
-    for (int y = 0; y < rows; ++y) {
-        for (int x = 0; x < cols; ++x)
-        {
-            Position pos(x, y);
-            g[pos] = INF;
-            rhs[pos] = INF;
-        }
-    }
+	for (int y = 0; y < rows; ++y)
+	{
+		for (int x = 0; x < cols; ++x)
+		{
+			NodeDS* newNodeDS = new NodeDS(Position(x, y), INF, INF);
+			newNodeDS->key = calculateKey(newNodeDS);
+			allNodeDSs[Position(x, y)] = newNodeDS;
+		}
+	}
 
-    rhs[targetCell] = 0.0f;
-    keys[targetCell] = calculateKey(targetCell);
-    openList.insert({ keys[targetCell], targetCell });
+	//Linking neighbors
+	for (int y = 0; y < rows; ++y)
+	{
+		for (int x = 0; x < cols; ++x)
+		{
+			NodeDS* currentNodeDS = allNodeDSs[Position(x, y)];
+			for (const auto& dir : directions)
+			{
+				Position neighbor = { x + dir.x, y + dir.y };
+				if (isValidCell(neighbor))
+				{
+                    currentNodeDS->successors.push_back(allNodeDSs[neighbor]);
+                    allNodeDSs[neighbor]->predecessors.push_back(currentNodeDS);
+				}
+			}
+		}
+	}
 
+	allNodeDSs[targetCell]->rhs = 0.0f;
+    allNodeDSs[targetCell]->key = calculateKey(allNodeDSs[targetCell]);
+    openList.insert(allNodeDSs[targetCell]);
+	std::cout << openList.size() << std::endl;
+
+    std::cout << "Initialzed" << std::endl;
     computeShortestPath();
-    lastStart = startCell;
+}
+
+float DStarLite::costFunction(NodeDS* u, NodeDS* v)
+{
+	if (gridMap[v->pos.y][v->pos.x] == CellType::Obstacle)
+		return INF;
+	if (u->pos.x == v->pos.x && u->pos.y == v->pos.y)
+		return 0.0f;
+	return (u->pos.x == v->pos.x || u->pos.y == v->pos.y) ? 1.0f : std::sqrt(2.0f);
 }
 
 std::vector<Position> DStarLite::getPath()
@@ -160,42 +192,46 @@ std::vector<Position> DStarLite::getPath()
     Position currentPos = startCell;
     path.clear();
 
-	
+    std::cout << "G map: " << std::endl;
+    for (int y = 0; y < rows; ++y)
+    {
+        for (int x = 0; x < cols; ++x)
+        {
+            std::cout << std::setw(5) << std::setprecision(2) << std::fixed << allNodeDSs[Position(x, y)]->g << " | ";
+        }
+        std::cout << std::endl;
+    }
+    std::cout << "RHS map: " << std::endl;
+    for (int y = 0; y < rows; ++y)
+    {
+        for (int x = 0; x < cols; ++x)
+        {
+            std::cout << std::setw(5) << std::setprecision(2) << std::fixed << allNodeDSs[Position(x, y)]->rhs << " | ";
+        }
+        std::cout << std::endl;
+    }
 
     while (currentPos != targetCell)
-    {
-        path.push_back(currentPos);
-
+    {        
         float minCost = INF;
-        Position nextCell = currentPos;
-        //std::cout << "11111" << std::endl;
+        Position nextCell = currentPos;	
 
-        for (const auto& dir : directions)
-        {
-            Position neighborPos = { currentPos.x + dir.x, currentPos.y + dir.y };
-            if (isValidCell(neighborPos))
-            {
-                float cost = (dir.x == 0 || dir.y == 0) ? 1.0f : std::sqrt(2.0f);
-                if (gridMap[neighborPos.y][neighborPos.x] == CellType::Obstacle)
-                {
-                    cost = INF;
-                }
-
-                if (g[neighborPos] + cost < minCost)
-                {
-                    minCost = g[neighborPos] + cost;
-                    nextCell = neighborPos;
-                }
-            }
-        }
+		for (const auto& succ : allNodeDSs[currentPos]->successors)
+		{
+			float cost = costFunction(allNodeDSs[currentPos], succ) + succ->g;
+			if (cost < minCost)
+			{
+				minCost = cost;
+				nextCell = succ->pos;
+			}
+		}
         if (minCost == INF)
         {
-            std::cout << "No path found" << std::endl;
+            //std::cout << "No path found" << std::endl;
             return {};
         }
-        std::cout << "Insert path cell: " << nextCell.x << ", " << nextCell.y << std::endl;
-        path.push_back(nextCell);
-        currentPos = nextCell;
+        path.push_back(currentPos);
+        currentPos = nextCell;        
     }
     path.push_back(targetCell);
     return path;
@@ -203,119 +239,19 @@ std::vector<Position> DStarLite::getPath()
 
 void DStarLite::updateObstacle(const Position& obstacle, const Position& newStart)
 {
-    gridMap[obstacle.y][obstacle.x] = CellType::Obstacle;
-    rhs[obstacle] = INF;
-    //g[obstacle] = INF;
-
     km += heuristic(startCell, newStart);
+    startCell = newStart;
 
-    /*auto it = openList.begin();
-    while (it != openList.end())
-    {
-        if (it->second == obstacle)
-        {
-            it = openList.erase(it);
-        }
-        else
-        {
-            ++it;
-        }
-    }*/
+    gridMap[obstacle.y][obstacle.x] = CellType::Obstacle;
 
-    std::cout << "G map: " << std::endl;
-    for (int y = 0; y < rows; ++y)
-    {
-        for (int x = 0; x < cols; ++x)
-        {
-            std::cout << std::setw(5) << std::setprecision(2) << std::fixed << g[Position(x, y)] << " | ";
-        }
-        std::cout << std::endl;
-    }
-    std::cout << "RHS map: " << std::endl;
-    for (int y = 0; y < rows; ++y)
-    {
-        for (int x = 0; x < cols; ++x)
-        {
-            std::cout << std::setw(5) << std::setprecision(2) << std::fixed << rhs[Position(x, y)] << " | ";
-        }
-        std::cout << std::endl;
-    }
-
-	startCell = newStart;
-
-    // Update all predecessors of the obstacle cell
-    for (const auto& dir : directions)
-    {
-        Position neighbor = { obstacle.x + dir.x, obstacle.y + dir.y };
-        float cOld = (dir.x == 0 || dir.y == 0) ? 1.0f : std::sqrt(2.0f);
-        if (isValidCell(neighbor) && neighbor != targetCell)
-        {
-            for (const auto& dir2 : directions)
-            {
-                Position neighbor2 = { neighbor.x + dir2.x, neighbor.y + dir2.y };
-                if (isValidCell(neighbor2))
-                {
-                    float cost = (dir2.x == 0 || dir2.y == 0) ? 1.0f : std::sqrt(2.0f);
-                    if (gridMap[neighbor2.y][neighbor2.x] == CellType::Obstacle)
-                        cost = INF;
-                    rhs[neighbor] = std::min(rhs[neighbor], g[neighbor2] + cost);
-                }
-            }
-            std::cout << "Updating vertex: (" << neighbor.x << ", " << neighbor.y << ")\n";
-            std::cout << "New RHS: " << rhs[neighbor] << std::endl;
-            //updateVertex(neighbor);
-        }
-		if (neighbor == targetCell)
+	for (const auto& neighbor : allNodeDSs[obstacle]->successors)
+	{
+		if (neighbor->pos != targetCell)
 		{
-            static bool oneTime = false;
-			if (!oneTime)
-			{
-                rhs[targetCell] = 0.0f;
-                keys[targetCell] = calculateKey(targetCell);
-                openList.insert({ keys[targetCell], targetCell });
-                oneTime = true;
-			}
-		}
-    }
-
-    std::cout << "G map: " << std::endl;
-    for (int y = 0; y < rows; ++y)
-    {
-        for (int x = 0; x < cols; ++x)
-        {
-            std::cout << std::setw(5) << std::setprecision(2) << std::fixed << g[Position(x, y)] << " | ";
+			neighbor->rhs = std::min(neighbor->rhs, costFunction(allNodeDSs[obstacle], neighbor) + allNodeDSs[obstacle]->g);
         }
-        std::cout << std::endl;
-    }
-    std::cout << "RHS map: " << std::endl;
-    for (int y = 0; y < rows; ++y)
-    {
-        for (int x = 0; x < cols; ++x)
-        {
-            std::cout << std::setw(5) << std::setprecision(2) << std::fixed << rhs[Position(x, y)] << " | ";
-        }
-        std::cout << std::endl;
-    }
+		updateVertex(neighbor);
+	}
 
     computeShortestPath();
-
-    std::cout << "G map after: " << std::endl;
-    for (int y = 0; y < rows; ++y)
-    {
-        for (int x = 0; x < cols; ++x)
-        {
-            std::cout << std::setw(5) << std::setprecision(2) << std::fixed << g[Position(x, y)] << " | ";
-        }
-        std::cout << std::endl;
-    }
-    std::cout << "RHS map: " << std::endl;
-    for (int y = 0; y < rows; ++y)
-    {
-        for (int x = 0; x < cols; ++x)
-        {
-            std::cout << std::setw(5) << std::setprecision(2) << std::fixed << rhs[Position(x, y)] << " | ";
-        }
-        std::cout << std::endl;
-    }
-
 }

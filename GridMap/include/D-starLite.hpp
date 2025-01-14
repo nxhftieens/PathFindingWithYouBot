@@ -7,6 +7,7 @@
 #include <cmath>
 #include <iostream>
 #include <map>
+#include <limits>
 
 #include "../include/Element.hpp"
 
@@ -39,6 +40,35 @@ struct Key
     }
 };
 
+struct NodeDS 
+{
+	Position pos;
+	float g;
+	float rhs;
+	float h;
+	Key key;
+	std::vector<NodeDS*> successors;
+	std::vector<NodeDS*> predecessors;
+	NodeDS(const Position& pos, float g, float rhs)
+		: pos(pos), g(g), rhs(rhs), successors(), predecessors()
+	{
+	}
+};
+
+struct NodeDSComparator
+{
+    bool operator()(const NodeDS* lhs, const NodeDS* rhs) const
+    {
+        if (lhs->key < rhs->key)
+            return false;
+        if (rhs->key < lhs->key)
+            return true;
+        if (lhs->pos.x != rhs->pos.x)
+            return lhs->pos.x > rhs->pos.x;
+        return lhs->pos.y > rhs->pos.y;
+    }
+};
+
 struct PositionComparator
 {
     bool operator()(const Position& lhs, const Position& rhs) const
@@ -63,42 +93,29 @@ struct OpenListComparator
     }
 };
 
-struct PositionComparator
-{
-	bool operator()(const Position& lhs, const Position& rhs) const
-	{
-		if (lhs.x == rhs.x)
-			return lhs.y > rhs.y;
-		return lhs.x > rhs.x;
-	}
-};
-
 class DStarLite
 {
 private:
     std::vector<std::vector<CellType>> gridMap;
     Position startCell, targetCell;
     int rows, cols;
+	std::map<Position, NodeDS*, PositionComparator> allNodeDSs;
+	std::set<NodeDS*, NodeDSComparator> openList;
 
-    std::map<Position, float, PositionComparator> g, rhs;
-    std::map<Position, Key, PositionComparator> keys;
-    std::set<std::pair<Key, Position>, OpenListComparator> openList;
     float km;
 
     std::vector<Position> path;
-    Position lastStart;
+    Position lastStart;    
 
-    std::set<Position, PositionComparator> visitedNodes;
+    float heuristic(const Position& current, const Position& startCell);
 
-    float heuristic(const Position& a, const Position& b);
+    Key calculateKey(NodeDS* u);
 
-    Key calculateKey(const Position& u);
-
-    void updateVertex(const Position& u);
-
-    
+    void updateVertex(NodeDS* u);    
 
     bool isValidCell(const Position& pos) const;
+
+	float costFunction(NodeDS* u, NodeDS* v);
 
 public:
     void computeShortestPath();
@@ -115,6 +132,4 @@ public:
 
 	void updateObstacle(const Position& obstaclePos, const Position& newStart);
 };
-
-
 #endif // !DSTARLITE_HEADER_HPP
