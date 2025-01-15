@@ -13,3 +13,4 @@ project ("PathFindingWithYouBot")
 
 # Include sub-projects.
 add_subdirectory ("GridMap")
+add_subdirectory ("Detect")
