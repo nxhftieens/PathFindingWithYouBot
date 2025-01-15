@@ -4,7 +4,7 @@
 
 # Add source to this project's executable.
 add_executable (Detect	"src/Detect.cpp"
-						"include/Detect.hpp")
+						"include/Detect.hpp" "src/MapFromCam.cpp")
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)
   set_property(TARGET Detect PROPERTY CXX_STANDARD 20)
