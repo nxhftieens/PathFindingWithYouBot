@@ -53,7 +53,7 @@ void addUShape(vector<vector<CellType>>& gridMap,
     const int& centerX, const int& centerY, const int& width, const int& height,
     const double& angle, const double& resolution, const double& minX, const double& minY);
 
-vector<vector<CellType>> mapFromImage(const string& imgPath, const string& dirForCalibration);
+vector<vector<CellType>> mapFromImage(const string& imgPath, const string& dirForCalibration, const bool& calibrate);
 
 void calibrateCameraFromImages(const string& dir, Mat& cameraMatrix, Mat& distCoeffs);
 

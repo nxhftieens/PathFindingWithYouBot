@@ -31,5 +31,6 @@ include_directories(${OpenCV_INCLUDE_DIRS})
 
 target_link_libraries(GridMap PRIVATE SFML::Graphics ${OpenCV_LIBS})
 
+add_definitions(-DPROJECT_DIR="${PROJECT_SOURCE_DIR}")
 
 # TODO: Add tests and install targets if needed.

@@ -1,5 +1,7 @@
 #include "../include/MapFromCam.hpp"
 
+#define CALIB_PARAMS_FILE std::string(PROJECT_DIR) + "/Detect/calibParams.xml"
+
 // Main function to execute the mapping and print the grid
 //int main() {
 //	/*if (argc < 3) {int argc, char** argv
@@ -29,15 +31,30 @@
 //	return 0;
 //}
 
-vector<vector<CellType>> mapFromImage(const string& imgPath, const string& dirForCalibration) 
+vector<vector<CellType>> mapFromImage(const string& imgPath, const string& dirForCalibration, const bool& calibrate = true) 
 {
 	vector<vector<CellType>> gridMap;
 
 	Mat cameraMatrix, distCoeffs;
 	const float markerLength = 0.19f;
 
-	// Get camera matrix and distortion coefficients
-	calibrateCameraFromImages(dirForCalibration, cameraMatrix, distCoeffs);	
+	std::cout << "Calibration file path: " << CALIB_PARAMS_FILE << std::endl;
+
+	if (calibrate) {
+		// Get camera matrix and distortion coefficients
+		calibrateCameraFromImages(dirForCalibration, cameraMatrix, distCoeffs);
+	}
+	else {
+		// Load camera matrix and distortion coefficients from file
+		FileStorage fs(CALIB_PARAMS_FILE, FileStorage::READ);
+		if (!fs.isOpened()) {
+			cout << "Failed to open calibration file." << endl;
+			return gridMap;
+		}
+		fs["cameraMatrix"] >> cameraMatrix;
+		fs["distCoeffs"] >> distCoeffs;
+		fs.release();
+	}
 
 	aruco::DetectorParameters detectorParams = aruco::DetectorParameters();
 	aruco::Dictionary dictionary = aruco::getPredefinedDictionary(aruco::DICT_4X4_250);
@@ -329,12 +346,17 @@ void calibrateCameraFromImages(const string& dir, Mat& cameraMatrix, Mat& distCo
 	cout << "Frame size: " << frameSize << endl;
 	vector<Mat> rvecs, tvecs;
 	try {
-		calibrateCamera(objpoints, imgpoints, frameSize, cameraMatrix, distCoeffs, rvecs, tvecs);
+		calibrateCamera(objpoints, imgpoints, frameSize, cameraMatrix, distCoeffs, rvecs, tvecs);		
 	}
 	catch (const cv::Exception& e) {
 		cerr << "Calibration failed: " << e.what() << endl;
 		return;
-	}		
+	}
+	// Save camera matrix and distortion coefficients to file
+	FileStorage fs(CALIB_PARAMS_FILE, FileStorage::WRITE);
+	fs << "cameraMatrix" << cameraMatrix;
+	fs << "distCoeffs" << distCoeffs;
+	fs.release();
 	//calibrateCamera(objpoints, imgpoints, frameSize, cameraMatrix, distCoeffs, rvecs, tvecs);
 }
 

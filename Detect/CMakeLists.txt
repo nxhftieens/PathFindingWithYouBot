@@ -18,5 +18,6 @@ include_directories(${OpenCV_INCLUDE_DIRS})
 target_link_libraries(Detect ${OpenCV_LIBS})
 target_link_libraries(MapFromCam ${OpenCV_LIBS})
 
+add_definitions(-DPROJECT_DIR="${PROJECT_SOURCE_DIR}")
 
 # TODO: Add tests and install targets if needed.

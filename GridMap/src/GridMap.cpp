@@ -543,9 +543,9 @@ void Robot::lookAhead(std::vector<std::vector<CellType>>& gridMap, const std::ve
 	}
 }
 
-void GridMap::setGridMapFromImg(const std::string& imgPath, const std::string& dirForCalibration, const int& cellSizeInPixel)
+void GridMap::setGridMapFromImg(const std::string& imgPath, const std::string& dirForCalibration, const int& cellSizeInPixel, const bool& calibrate = true)
 {
-    gridMap = mapFromImage(imgPath, dirForCalibration);
+    gridMap = mapFromImage(imgPath, dirForCalibration, calibrate);
 	rows = gridMap.size();
 	cols = gridMap[0].size();
 	for (int y = 0; y < rows; ++y)
@@ -594,7 +594,7 @@ int main()
 	string dirForCalibration = "D:/SourceCode/PathFindingWithYouBot/Detect/CamCalib";
 
 	GridMap gridMapFromImg(cellSize, 0, 0);
-	gridMapFromImg.setGridMapFromImg(imgPath, dirForCalibration, cellSize);
+	gridMapFromImg.setGridMapFromImg(imgPath, dirForCalibration, cellSize, false);
 
     gridMapFromImg.visualize();
     return 0;
