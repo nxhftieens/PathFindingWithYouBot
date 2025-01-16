@@ -232,6 +232,7 @@ void GridMap::getPixelPath(DStarLite& dstarlite, Robot& robot)
     gridPath.clear();
 	dstarlite.replan();
     gridPath = dstarlite.getPath();
+    publishPath();
 
     for (const auto& pos : gridPath)
     {
@@ -579,23 +580,104 @@ void GridMap::setUpDStarLite(DStarLite& dstarlite)
     }
 }
 
+void GridMap::publishPath()
+{
+    // Create a TCP socket
+    sf::TcpSocket socket;
+
+    // Connect to the server (localhost) on port 53000
+    if (socket.connect(sf::IpAddress(127, 0, 0, 1), 53000) != sf::Socket::Status::Done)
+    {
+        std::cerr << "Error connecting to server." << std::endl;
+        return;
+    }
+
+    // Prepare the initial command to indicate this is a publisher
+    sf::Packet commandPacket;
+    int32_t command = 1; // Command 1 indicates a publisher
+    commandPacket << command;
+
+    // Send the command
+    if (socket.send(commandPacket) != sf::Socket::Status::Done)
+    {
+        std::cerr << "Error sending command to server." << std::endl;
+        socket.disconnect();
+        return;
+    }
+
+    // Prepare the data to send
+    sf::Packet packet;
+
+    // Add grid map size
+    int32_t gridRows = static_cast<int32_t>(rows);
+    int32_t gridCols = static_cast<int32_t>(cols);
+    packet << gridRows << gridCols;
+
+    // Collect obstacle positions
+    std::vector<sf::Vector2i> obstaclePositions;
+    for (int y = 0; y < rows; ++y)
+    {
+        for (int x = 0; x < cols; ++x)
+        {
+            if (gridMap[y][x] == CellType::Obstacle)
+            {
+                obstaclePositions.emplace_back(x, y);
+            }
+        }
+    }
+
+    // Add number of obstacles
+    packet << static_cast<uint32_t>(obstaclePositions.size());
+
+    // Add obstacle positions
+    for (const auto& pos : obstaclePositions)
+    {
+        packet << pos.x << pos.y;
+    }
+
+    // Add start position
+    packet << startCell.x << startCell.y;
+
+    // Add target position
+    packet << targetCell.x << targetCell.y;
+
+    // Add the number of positions in the path
+    packet << static_cast<uint32_t>(gridPath.size());
+
+    // Add the positions in the path
+    for (const auto& pos : gridPath)
+    {
+        packet << pos.x << pos.y;
+    }
+
+    // Send the packet
+    if (socket.send(packet) != sf::Socket::Status::Done)
+    {
+        std::cerr << "Error sending data to server." << std::endl;
+        socket.disconnect();
+        return;
+    }
+
+    // Keep the connection open if you plan to send updates continuously
+    // Otherwise, you can disconnect
+    socket.disconnect();
+}
+
 int main()
 {
     // Define the size of the window and grid
-    /*int cellSize = 5;
+    int cellSize = 20;
     int rows = 60;
     int cols = 80;
     GridMap gridMap(cellSize, rows, cols);
     gridMap.randomize();
-    gridMap.visualize();*/
+    gridMap.visualize();
 
-    int cellSize = 5;
+    /*int cellSize = 5;
     string imgPath = "D:/SourceCode/PathFindingWithYouBot/Detect/asd.png";
 	string dirForCalibration = "D:/SourceCode/PathFindingWithYouBot/Detect/CamCalib";
-
 	GridMap gridMapFromImg(cellSize, 0, 0);
 	gridMapFromImg.setGridMapFromImg(imgPath, dirForCalibration, cellSize, false);
-
-    gridMapFromImg.visualize();
+    gridMapFromImg.visualize();*/
     return 0;
 }

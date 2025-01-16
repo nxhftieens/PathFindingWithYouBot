@@ -17,6 +17,8 @@
 #include "../include/D-starLite.hpp"
 #include "../../Detect/include/MapFromCam.hpp"
 
+#include <SFML/Network.hpp>
+
 
 class Robot
 {
@@ -96,6 +98,7 @@ public:
 	void setWall();
 	void setGridMapFromImg(const std::string& imgPath, const std::string& dirForCalibration, const int& cellSizeInPixel, const bool& calibrate);
 	void setUpDStarLite(DStarLite& dstarlite);
+	void publishPath();
 };
 
 
