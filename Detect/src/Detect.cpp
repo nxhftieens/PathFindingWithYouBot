@@ -5,9 +5,6 @@ const float markerLength = 0.19f;
 
 int main()
 {
-	/*string imgPath;
-	Mat img = imread(imgPath);*/
-
 	// Generate and save a chessboard image
 	//generateChessboardImage(20, 20, 500, "D:\\chessboard.png");
 
@@ -139,7 +136,6 @@ int main()
 				// Marker ID 0 not detected
 				cout << "Marker ID 0 not detected. Cannot compute relative positions." << endl;
 			}
-
 		}
 
 		frame.copyTo(frameCopy);

@@ -8,13 +8,15 @@
 #include <vector>
 #include <SFML/Graphics.hpp>
 #include <random>
+#include <cmath>
 
 #include <chrono>
 
 #include "../include/Element.hpp"
-#include"../include/A-star.hpp"
-#include"../include/D-starLite.hpp"
-#include <cmath>
+#include "../include/A-star.hpp"
+#include "../include/D-starLite.hpp"
+#include "../../Detect/include/MapFromCam.hpp"
+
 
 class Robot
 {
@@ -92,6 +94,7 @@ public:
 	void getPixelPath(DStarLite& dstarlite, Robot& robot);
 	std::vector<std::vector<CellType>> inflateObstacles(const float& inflationRadius);
 	void setWall();
+	void setGridMapFromImg(const std::string& imgPath, const std::string& dirForCalibration, const int& cellSizeInPixel);
 };
 
 
