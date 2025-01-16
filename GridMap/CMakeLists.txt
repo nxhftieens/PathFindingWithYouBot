@@ -9,7 +9,9 @@ add_executable (GridMap "src/GridMap.cpp"
                         "include/GridMap.hpp"
                         "include/A-star.hpp"
                         "include/D-starLite.hpp"
-                        "include/Element.hpp")
+                        "include/Element.hpp"
+                        "../Detect/include/MapFromCam.hpp"
+                        "../Detect/src/MapFromCam.cpp")
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)
   set_property(TARGET GridMap PROPERTY CXX_STANDARD 20)
@@ -24,7 +26,10 @@ FetchContent_Declare(SFML
     SYSTEM)
 FetchContent_MakeAvailable(SFML)
 
-target_link_libraries(GridMap PRIVATE SFML::Graphics)
+find_package(OpenCV REQUIRED)
+include_directories(${OpenCV_INCLUDE_DIRS})
+
+target_link_libraries(GridMap PRIVATE SFML::Graphics ${OpenCV_LIBS})
 
 
 # TODO: Add tests and install targets if needed.
