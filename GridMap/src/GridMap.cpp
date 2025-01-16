@@ -45,6 +45,7 @@ void GridMap::eventHandler(sf::RenderWindow& window, Position& selectedCell, Rob
                     // Set the start point
                     startCell = selectedCell;
                     dstarlite.initialize(startCell, targetCell);
+                    setUpDStarLite(dstarlite);
 					robot.updatePos(startCell, cellSize);
                     robot.seenObstacles.clear();
                     robot.resetPathLength();
@@ -54,6 +55,7 @@ void GridMap::eventHandler(sf::RenderWindow& window, Position& selectedCell, Rob
                     // Set the target point
                     targetCell = selectedCell;
                     dstarlite.initialize(startCell, targetCell);
+                    setUpDStarLite(dstarlite);
 					robot.updatePos(startCell, cellSize);
                     robot.seenObstacles.clear();
                     robot.resetPathLength();
@@ -78,6 +80,7 @@ void GridMap::eventHandler(sf::RenderWindow& window, Position& selectedCell, Rob
                     // Generate a new random map
                     randomize();
                     dstarlite.initialize(startCell, targetCell);
+                    setUpDStarLite(dstarlite);
 					robot.updatePos(startCell, cellSize);
                     robot.seenObstacles.clear();
                     robot.resetPathLength();
@@ -98,6 +101,7 @@ void GridMap::eventHandler(sf::RenderWindow& window, Position& selectedCell, Rob
                     // Generate a new random map
                     randomize();
                     dstarlite.initialize(startCell, targetCell);
+                    setUpDStarLite(dstarlite);
 					robot.updatePos(startCell, cellSize);
                     robot.seenObstacles.clear();
                     robot.resetPathLength();
@@ -107,6 +111,7 @@ void GridMap::eventHandler(sf::RenderWindow& window, Position& selectedCell, Rob
                 {
 					// Generate the path
                     dstarlite.initialize(startCell, targetCell);
+                    setUpDStarLite(dstarlite);
                     robot.updatePos(startCell, cellSize);
                     robot.seenObstacles.clear();
                     robot.resetPathLength();
@@ -139,6 +144,7 @@ void GridMap::visualize()
 	AStar astar(gridMap, startCell, targetCell);
 	DStarLite dstarlite(Position(cols, rows));
 	dstarlite.initialize(startCell, targetCell);
+	setUpDStarLite(dstarlite);
 
     while (window.isOpen())
     {
@@ -559,6 +565,20 @@ void GridMap::setGridMapFromImg(const std::string& imgPath, const std::string& d
 	cellSize = cellSizeInPixel;
 }
 
+void GridMap::setUpDStarLite(DStarLite& dstarlite)
+{
+    for (int y = 0; y < rows; ++y)
+    {
+        for (int x = 0; x < cols; ++x)
+        {
+            if (gridMap[y][x] == CellType::Obstacle)
+            {
+                dstarlite.updateCell(Position(x, y), -1);
+            }
+        }
+    }
+}
+
 int main()
 {
     // Define the size of the window and grid
@@ -579,8 +599,3 @@ int main()
     gridMapFromImg.visualize();
     return 0;
 }
-
-// TODO:
-// 1. Add dimensions for the robot
-// 2. Add safety distance for the robot
-// 3. Use camera with markers to simulate the visible area of the robot

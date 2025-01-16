@@ -95,6 +95,7 @@ public:
 	std::vector<std::vector<CellType>> inflateObstacles(const float& inflationRadius);
 	void setWall();
 	void setGridMapFromImg(const std::string& imgPath, const std::string& dirForCalibration, const int& cellSizeInPixel);
+	void setUpDStarLite(DStarLite& dstarlite);
 };
 
 
