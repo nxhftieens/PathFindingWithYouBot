@@ -181,7 +181,7 @@ int main()
 
 void calibrateCameraCustom(Mat& cameraMatrix, Mat& distCoeffs)
 {
-	const int chessboardWidth = 6;
+	const int chessboardWidth = 9;
 	const int chessboardHeight = 6;
 	const Size boardSize = Size(chessboardWidth, chessboardHeight);
 

@@ -31,7 +31,7 @@
 //	return 0;
 //}
 
-vector<vector<CellType>> mapFromImage(const string& imgPath, const string& dirForCalibration, const bool& calibrate = true) 
+vector<vector<CellType>> mapFromImage(const string& imgPath, const string& dirForCalibration, const bool& calibrate = true)
 {
 	vector<vector<CellType>> gridMap;
 
@@ -93,6 +93,8 @@ vector<vector<CellType>> mapFromImage(const string& imgPath, const string& dirFo
 				break;
 			}
 		}
+
+		//Marker with ID = 0 is marked as the origin of the grid map, located at upper left corner
 
 		if (idx0 >= 0) {
 			// Marker ID 0 detected
@@ -161,11 +163,11 @@ vector<vector<CellType>> mapFromImage(const string& imgPath, const string& dirFo
 						break;
 					}
 				}
-				markers.push_back(MarkerInfo{ ids[i], x, y, rotationAngle, type, shape });
+				markers.push_back(MarkerInfo{ ids[i], y, x, rotationAngle, type, shape }); //y and x are swapped to match the gridMap orientation when ID 0 is rotated right 90 degrees
 
 				// Identify boundary markers (IDs 0,1)
 				if (ids[i] >= 0 && ids[i] <= 1) {
-					boundaryMarkers[ids[i]] = MarkerInfo{ ids[i], x, y, rotationAngle, CellType::Empty, ObstacleShape::None };
+					boundaryMarkers[ids[i]] = MarkerInfo{ ids[i], y, x, rotationAngle, CellType::Empty, ObstacleShape::None };
 				}
 			}
 
@@ -385,7 +387,7 @@ Vec3d rotationMatrixToEulerAngles(Mat& R)
 
 pair<int, int> rotatePoint(const int& x, const int& y, const double& angle)
 {
-	double rad = angle * CV_PI / 180.0;
+	double rad = -angle * CV_PI / 180.0;
 	double cosA = cos(rad);
 	double sinA = sin(rad);
 	double newX = x * cosA - y * sinA;
